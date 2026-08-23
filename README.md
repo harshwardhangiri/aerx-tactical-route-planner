@@ -66,11 +66,11 @@ Extreme, confined high terrain offers little masking, so even the best route is 
 ![Ghats Pareto sweep](assets/ghats_pareto.png)
 
 ### 🎥 CesiumJS 3D flythrough
-The `*_cesium.html` viewer flies the sortie along a timeline over a georeferenced globe (terrain, ingress/egress tubes, threat domes). To add a clip to this README:
+The `*_cesium.html` viewer flies the sortie along a timeline over a georeferenced globe — real terrain, ingress/egress route tubes, and threat domes, with a chase-cam you can lock onto the aircraft.
 
-1. `python serve_viewer.py` and press ▶ on the timeline.
-2. Screen-record the flythrough (Windows **Win+G** game bar, or any recorder).
-3. Either save it as a GIF into `assets/flythrough.gif` and add `![flythrough](assets/flythrough.gif)` here, **or** drag the `.mp4` straight into this README in GitHub's web editor — GitHub hosts and renders it as a video player automatically.
+![CesiumJS flythrough](assets/flythrough.gif)
+
+Run it live: `python serve_viewer.py` serves the newest viewer over http and opens it. Left-drag orbits, scroll zooms, and the timeline / ▶ button flies the mission.
 
 ---
 
