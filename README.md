@@ -37,6 +37,43 @@ python serve_viewer.py                        # open the CesiumJS 3D globe
 
 ---
 
+## 🖼️ Results gallery
+
+*All figures are produced by `python main.py <region>` and land in `results/<region>/<timestamp>/`. The samples below are checked into [`assets/`](assets/).*
+
+### Western Ghats — the distance-vs-survivability trade-off
+The shortest sortie flies past the summit radar and is **~34% survivable**; the valley detour is **~69% survivable** for ~25% more distance — and wins the mission score.
+
+| Mission scorecard | Tactical dashboard |
+|:---:|:---:|
+| ![Ghats scorecard](assets/ghats_scorecard.png) | ![Ghats tactical dashboard](assets/ghats_dashboard.png) |
+
+The **tactical dashboard** packs four panels: the 3D battlefield (terrain + threat ranges + ingress/egress tubes), a top-down detection-risk heatmap with terrain shadows, a nap-of-the-earth altitude profile, and the Monte-Carlo robustness swarm.
+
+### Any location on Earth — Swiss Alps (`--lat 46.5 --lon 8.0`)
+Threats auto-place on the region's own summits; the safe route detours through the valleys (**0.2% → 65% survivable**).
+
+![Swiss Alps tactical dashboard](assets/swiss_alps_dashboard.png)
+
+### Mount Everest — a genuinely hard region
+Extreme, confined high terrain offers little masking, so even the best route is only modestly survivable — an honest result, not a failure.
+
+![Everest tactical dashboard](assets/everest_dashboard.png)
+
+### Pareto risk-weight sweep
+"How much should I weight safety?" — each point re-plans at a different risk weight; you buy survivability with distance until diminishing returns.
+
+![Ghats Pareto sweep](assets/ghats_pareto.png)
+
+### 🎥 CesiumJS 3D flythrough
+The `*_cesium.html` viewer flies the sortie along a timeline over a georeferenced globe (terrain, ingress/egress tubes, threat domes). To add a clip to this README:
+
+1. `python serve_viewer.py` and press ▶ on the timeline.
+2. Screen-record the flythrough (Windows **Win+G** game bar, or any recorder).
+3. Either save it as a GIF into `assets/flythrough.gif` and add `![flythrough](assets/flythrough.gif)` here, **or** drag the `.mp4` straight into this README in GitHub's web editor — GitHub hosts and renders it as a video player automatically.
+
+---
+
 ## 🚀 Key Capabilities
 
 1. **Digital Elevation Model (DEM) & Interpolation**: Continuous 2D terrain with sub-grid bilinear interpolation. Every mission runs on a **real Copernicus GLO-30 DEM via rasterio** — built-in Everest/Khumbu and Western Ghats regions, plus **any lat/lon on Earth** (the tile is fetched from public AWS open data and cached); any user SRTM/GeoTIFF tile drops in unchanged. Every saved figure is stamped with its generation time.
@@ -44,12 +81,12 @@ python serve_viewer.py                        # open the CesiumJS 3D globe
 3. **Radar-Equation Detectability & 3D Threat Volumes**: Normalized inverse-R⁴ radar-equation detectability, range-gated and LOS-gated, aggregated by probabilistic union. Threats are full **3D detection volumes** — horizontal coverage sectors, vertical cones, minimum-detection-altitude floors — and typed (`radar`/`sam`/`aaa`) with per-type lethality weighting.
 4. **Hard-Feasibility / Soft-Risk Planning**: Optional detection-threshold that marks over-exposed nodes as hard keep-outs (not just costs), implementing the hard-feasibility formulation of Drones 2026, 10, 469.
 5. **Layered 3D Planning State Space**: Enforces AGL clearances and kinematic climb-slope limits; fast trilinear risk lookup for inner loops.
-6. **D* Lite 3D Global Planner**: Incremental graph search with multi-objective cost, supporting **incremental replanning** for pop-up threats (see `--replan-demo`).
+6. **D* Lite 3D Global Planner**: Incremental graph search with multi-objective cost, supporting **incremental replanning** for pop-up threats (the `*_replanning.png` demo, produced every run).
 7. **Local Trajectory Refinement**: Risk-aware LOS pruning + B-spline smoothing, or **risk-aware RRT\*** with informed-tube sampling, risk-aware shortcutting, and **helicopter kinematic limits** (max turn-rate + climb-rate for NOE flight) (`--refine rrt`).
 8. **Mission Performance & Survivability Scoring**: Travel time, energy proxies, cumulative/peak risk, survivability \(S_{\text{surv}} = e^{-\kappa R}\), and composite scores.
 9. **Monte Carlo Robustness Analysis**: Stochastic evaluation under tracking/hazard-estimation perturbations.
-10. **Sensitivity / Pareto Study**: Sweeps the risk weight and traces the distance-vs-exposure trade-off front (`--pareto`).
-11. **Visualization**: Multi-panel Matplotlib dashboard (elevation-shaded 3D terrain, radar-shadow heatmaps, nap-of-the-earth profiles, Monte-Carlo swarms) **and** an interactive **browser 3D export** (self-contained Plotly HTML, `--web`).
+10. **Sensitivity / Pareto Study**: Sweeps the risk weight and traces the distance-vs-exposure trade-off front (the `*_pareto.png` study, produced every run).
+11. **Visualization**: Multi-panel Matplotlib dashboard (elevation-shaded 3D terrain, radar-shadow heatmaps, nap-of-the-earth profiles, Monte-Carlo swarms) **and** interactive **browser 3D exports** — a self-contained Plotly HTML view and a **CesiumJS** georeferenced globe flythrough — produced every run.
 
 > **Safety framing:** all hazards are generic simulated sensors with normalized, illustrative parameters (no real operational RCS/weapon/radar values). Results are planning-level research-simulation estimates, not operationally deployable.
 
