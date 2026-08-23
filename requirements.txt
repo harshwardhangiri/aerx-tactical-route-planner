@@ -1,0 +1,16 @@
+# AerX Labs — Threat-Aware Route Planning Engine
+# Pinned to the versions this build is validated against, so a fresh install
+# reproduces the same environment. Loosen the pins (>=) if you need newer.
+#
+# NOTE: this project targets NumPy 2.x (e.g. np.trapz was removed — the code uses
+# a version-safe trapezoidal integration). Do not downgrade below numpy 2.0.
+
+numpy==2.5.2
+scipy==1.18.0
+matplotlib==3.11.1
+pypdf==6.16.1
+
+# Needed only for the real-DEM scenarios (--scenario dem/ghats, run_region.py,
+# and src.terrain GeoTIFF read/write). The synthetic + fractal terrains use only
+# numpy, so the four core scenarios run without this.
+rasterio==1.5.1

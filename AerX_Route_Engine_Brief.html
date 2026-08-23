@@ -1,0 +1,506 @@
+<title>AerX Route Engine Brief</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --ground:#0A0F1E; --panel:#111B33; --panel-2:#16233E; --line:#25334F;
+    --ink:#D9E2F1; --dim:#8A9AB8; --faint:#5E6E8C;
+    --accent:#3DE1FF; --accent-deep:#12333f;
+    --dist:#22D3EE; --risk:#FF3D6E; --bal:#39FF9E; --warn:#FFC24B;
+    --mono:'IBM Plex Mono',ui-monospace,monospace;
+    --disp:'Chakra Petch',sans-serif;
+    --body:'IBM Plex Sans',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0;background:var(--ground);color:var(--ink);
+    font-family:var(--body);font-size:16px;line-height:1.62;
+    background-image:
+      radial-gradient(1200px 500px at 78% -10%, rgba(61,225,255,.07), transparent 60%),
+      linear-gradient(var(--line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size:auto, 46px 46px, 46px 46px;
+  }
+  body::before{content:"";position:fixed;inset:0;pointer-events:none;
+    background:linear-gradient(180deg,transparent 60%,rgba(5,8,16,.6));z-index:0}
+  .wrap{position:relative;z-index:1;max-width:1040px;margin:0 auto;padding:0 24px}
+  section{padding:52px 0;border-top:1px solid var(--line)}
+  section:first-of-type{border-top:0}
+
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.28em;
+    text-transform:uppercase;color:var(--accent);margin:0 0 14px}
+  h1{font-family:var(--disp);font-weight:700;letter-spacing:.01em;
+    font-size:clamp(2.1rem,5.6vw,3.7rem);line-height:1.02;margin:0;
+    text-wrap:balance;text-transform:uppercase}
+  h1 .thin{color:var(--dim);display:block;font-weight:500;
+    font-size:clamp(1rem,2.4vw,1.5rem);letter-spacing:.04em;margin-top:12px;text-transform:none}
+  h2{font-family:var(--disp);font-weight:600;text-transform:uppercase;letter-spacing:.06em;
+    font-size:1.5rem;margin:0 0 8px;text-wrap:balance}
+  h2 .num{color:var(--accent);font-size:.8em;margin-right:.5em}
+  h3.sub{font-family:var(--disp);text-transform:uppercase;letter-spacing:.05em;font-size:1.05rem;
+    margin:26px 0 6px;color:var(--ink)}
+  .lede{color:var(--dim);max-width:65ch;margin:0 0 26px;font-size:1.05rem}
+  p{max-width:68ch}
+  a{color:var(--accent)}
+  strong{color:var(--ink)}
+
+  .hero{padding:64px 0 40px}
+  .hero-thesis{margin:26px 0 0;max-width:62ch;font-size:1.12rem;color:var(--ink)}
+  .hero-thesis b{color:var(--accent)}
+  .chips{display:flex;flex-wrap:wrap;gap:10px;margin-top:30px}
+  .chip{font-family:var(--mono);font-size:12.5px;letter-spacing:.03em;
+    background:var(--panel);border:1px solid var(--line);border-radius:6px;
+    padding:8px 12px;color:var(--dim)}
+  .chip b{color:var(--ink);font-weight:600}
+
+  .contrast{display:grid;grid-template-columns:1fr auto 1fr;gap:0;align-items:stretch;
+    border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-top:8px}
+  .contrast>div{padding:22px 24px;background:var(--panel)}
+  .contrast .vs{display:flex;align-items:center;justify-content:center;
+    background:var(--panel-2);color:var(--accent);font-family:var(--disp);font-weight:700;padding:0 18px}
+  .contrast h4{margin:0 0 6px;font-family:var(--mono);font-size:12px;letter-spacing:.16em;text-transform:uppercase}
+  .contrast .a h4{color:var(--dim)} .contrast .b h4{color:var(--bal)}
+  .contrast p{margin:0;font-size:.96rem;color:var(--dim);max-width:none}
+
+  .spine{position:relative;margin-top:8px;padding-left:6px}
+  .stage{position:relative;display:grid;grid-template-columns:56px 1fr;gap:18px;padding:0 0 22px}
+  .rail{position:relative}
+  .rail::before{content:"";position:absolute;left:23px;top:6px;bottom:-22px;width:2px;
+    background:linear-gradient(var(--accent),var(--accent-deep))}
+  .stage:last-child .rail::before{display:none}
+  .node{width:46px;height:46px;border-radius:11px;background:var(--panel-2);
+    border:1px solid var(--line);display:flex;align-items:center;justify-content:center;
+    font-family:var(--disp);font-weight:700;color:var(--accent);font-size:1.05rem;position:relative;z-index:1}
+  .scard{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:15px 17px}
+  .scard .st{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px;margin-bottom:5px}
+  .scard .st h4{margin:0;font-family:var(--disp);font-weight:600;font-size:1.08rem;letter-spacing:.02em}
+  .scard .file{font-family:var(--mono);font-size:11px;color:var(--faint)}
+  .scard p{margin:0;color:var(--dim);font-size:.94rem;max-width:none}
+  .flow{font-family:var(--mono);font-size:12px;color:var(--accent);
+    background:var(--accent-deep);border:1px solid #1c4a58;border-radius:5px;
+    padding:2px 8px;display:inline-block;margin-top:9px}
+
+  .formula{font-family:var(--mono);font-size:13px;color:var(--ink);
+    background:var(--ground);border:1px solid var(--line);border-radius:6px;
+    padding:10px 13px;margin:10px 0;overflow-x:auto}
+  .formula .c{color:var(--accent)} .formula .r{color:var(--risk)} .formula .g{color:var(--bal)}
+
+  .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;margin-top:8px}
+  .mcard{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:20px}
+  .mcard h4{margin:0 0 10px;font-family:var(--disp);text-transform:uppercase;letter-spacing:.05em;font-size:1rem;color:var(--ink)}
+  .mcard p{margin:0;color:var(--dim);font-size:.92rem;max-width:none}
+  .mcard .formula{margin:0 0 10px}
+
+  /* derivation steps */
+  .steps{counter-reset:s;display:grid;gap:12px;margin:8px 0}
+  .step{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    padding:14px 16px 14px 52px}
+  .step::before{counter-increment:s;content:counter(s);position:absolute;left:14px;top:14px;
+    width:24px;height:24px;border-radius:50%;background:var(--accent-deep);border:1px solid var(--accent);
+    color:var(--accent);font-family:var(--mono);font-size:12px;display:flex;align-items:center;justify-content:center}
+  .step h4{margin:0 0 4px;font-family:var(--disp);font-size:1rem;letter-spacing:.02em}
+  .step p{margin:0;color:var(--dim);font-size:.93rem;max-width:none}
+  .step .formula{margin:8px 0 0}
+
+  .callout{background:linear-gradient(180deg,rgba(61,225,255,.06),transparent);
+    border:1px solid #244a63;border-left:3px solid var(--accent);border-radius:8px;padding:16px 18px;margin:16px 0}
+  .callout h4{margin:0 0 8px;font-family:var(--disp);text-transform:uppercase;letter-spacing:.05em;font-size:.95rem;color:var(--accent)}
+  .callout p{margin:0 0 6px;font-size:.94rem;color:var(--dim)}
+
+  .tw{overflow-x:auto;border:1px solid var(--line);border-radius:11px;margin:8px 0}
+  table{border-collapse:collapse;width:100%;font-size:.92rem;min-width:520px}
+  th,td{text-align:left;padding:11px 15px;border-bottom:1px solid var(--line);vertical-align:top}
+  thead th{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);background:var(--panel-2)}
+  tbody tr:last-child td{border-bottom:0}
+  tbody tr:nth-child(even){background:rgba(255,255,255,.015)}
+  td code,th code{font-family:var(--mono);font-size:.85em;color:var(--accent)}
+  .num-col{font-variant-numeric:tabular-nums}
+  .tag{font-family:var(--mono);font-size:11px;padding:2px 8px;border-radius:20px;border:1px solid currentColor;white-space:nowrap}
+  .t-dist{color:var(--dist)} .t-risk{color:var(--risk)} .t-bal{color:var(--bal)}
+  .ok{color:var(--bal);font-weight:600} .over{color:var(--risk);font-weight:600}
+
+  .run{display:grid;gap:12px;margin-top:8px}
+  .runrow{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:13px 15px;display:grid;gap:6px}
+  .runrow .lbl{font-family:var(--disp);text-transform:uppercase;letter-spacing:.05em;font-size:.88rem;color:var(--ink)}
+  .runrow code{font-family:var(--mono);font-size:12.5px;color:var(--accent);background:var(--ground);
+    border:1px solid var(--line);border-radius:6px;padding:8px 12px;display:block;overflow-x:auto;white-space:pre}
+  .runrow .say{color:var(--dim);font-size:.87rem}
+
+  .out{display:grid;gap:16px;margin-top:8px}
+  .ocard{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:16px 18px}
+  .ocard .k{font-family:var(--mono);font-size:12px;color:var(--warn);margin-bottom:8px;display:inline-block;
+    background:var(--ground);border:1px solid var(--line);border-radius:5px;padding:4px 9px}
+  .ocard h4{margin:0 0 6px;font-family:var(--disp);font-size:1.05rem;letter-spacing:.02em}
+  .ocard p{margin:0 0 6px;color:var(--dim);font-size:.94rem;max-width:none}
+  .ocard ul{margin:6px 0 0;padding-left:18px;color:var(--dim);font-size:.92rem}
+  .ocard li{margin:3px 0}
+  .ocard b{color:var(--ink)}
+
+  .foot{color:var(--faint);font-size:.85rem;font-family:var(--mono);padding:32px 0 60px;border-top:1px solid var(--line);margin-top:16px}
+  .foot b{color:var(--dim)}
+  @media (max-width:560px){
+    .contrast{grid-template-columns:1fr}
+    .stage{grid-template-columns:42px 1fr;gap:12px}
+    .node{width:36px;height:36px}
+    .rail::before{left:17px}
+  }
+</style>
+
+<div class="wrap">
+
+  <section class="hero">
+    <p class="eyebrow">AerX Labs · Advanced Aerospace Systems Challenge 2026 · Technical Brief</p>
+    <h1>Threat-Aware Route Engine
+      <span class="thin">A terrain-aware, risk-sensitive 3D UAV mission planner — how it works, in detail.</span>
+    </h1>
+    <p class="hero-thesis">A conventional planner finds the <b>shortest</b> path. This engine plans a
+      <b>complete survivable sortie</b> — fly in, survive radar exposure by hiding in terrain, and get
+      home on one tank of fuel — over <b>real elevation data</b>, and scores every candidate route.</p>
+    <div class="chips">
+      <span class="chip"><b>real</b> Copernicus DEM · any region</span>
+      <span class="chip"><b>terrain-placed</b> threats</span>
+      <span class="chip"><b>ingress + egress</b> sorties</span>
+      <span class="chip"><b>fuel-budgeted</b> round trips</span>
+      <span class="chip">radar-equation <b>1/R⁴</b> detection</span>
+      <span class="chip"><b>D* Lite</b> incremental planner</span>
+      <span class="chip"><b>15/15</b> tests</span>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="num">01</span>The core idea</h2>
+    <p class="lede">One vertical slice: <strong>data → algorithm → score → visualization</strong>. Terrain is
+      one layer, radar visibility another; the planner fuses them into a single cost and searches for the
+      route that best balances distance, threat exposure, fuel, terrain clearance, and time — for the whole
+      round trip.</p>
+    <div class="contrast">
+      <div class="a"><h4>Shortest-path planner</h4>
+        <p>Minimizes distance. Flies straight through radar coverage. Ignores that a low-flying aircraft's
+          best defence is hiding behind terrain — and never checks if it can get home.</p></div>
+      <div class="vs">→</div>
+      <div class="b"><h4>Survivability planner</h4>
+        <p>Minimizes distance + threat exposure + energy + clearance, exploits terrain shadows, plans the
+          return leg too, and rejects any sortie that runs out of fuel.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="num">02</span>The pipeline</h2>
+    <p class="lede">Ten stages turn a heightmap and a threat list into a scored, flyable, visualized sortie.</p>
+    <div class="spine">
+      <div class="stage"><div class="rail"><div class="node">1</div></div>
+        <div class="scard"><div class="st"><h4>Terrain / DEM</h4><span class="file">terrain.py · los.py</span></div>
+          <p>Elevation grid; height at any point by bilinear interpolation. Every mission reads a
+            <b>real Copernicus GLO-30 GeoTIFF</b> through rasterio — Everest, Western Ghats, or any lat/lon.</p>
+          <span class="flow">Z[y,x] → ẑ(x,y)</span></div></div>
+      <div class="stage"><div class="rail"><div class="node">2</div></div>
+        <div class="scard"><div class="st"><h4>Line-of-Sight · terrain masking</h4><span class="file">los.py</span></div>
+          <p>Sample the radar→aircraft line; if terrain rises above the sightline anywhere, the aircraft is
+            masked (in the radar's shadow) and undetectable there.</p></div></div>
+      <div class="stage"><div class="rail"><div class="node">3</div></div>
+        <div class="scard"><div class="st"><h4>Threat detectability field</h4><span class="file">risk_field.py</span></div>
+          <p>Each threat is a 3D detection volume; detectability follows the radar equation, gated by range,
+            LOS, sector, cone, and minimum altitude, combined across radars. <em>(Full detail in §03.)</em></p></div></div>
+      <div class="stage"><div class="rail"><div class="node">4</div></div>
+        <div class="scard"><div class="st"><h4>3D planning grid + cost</h4><span class="file">planning_grid.py</span></div>
+          <p>Airspace → <code>(x,y,altitude)</code> nodes; below-terrain / low-clearance nodes are forbidden.
+            Each edge carries a weighted cost of distance + exposure + climb energy + clearance.</p></div></div>
+      <div class="stage"><div class="rail"><div class="node">5</div></div>
+        <div class="scard"><div class="st"><h4>Global planner · D* Lite</h4><span class="file">dstar_lite.py</span></div>
+          <p>Finds the minimum-cost route through the grid, for the <b>ingress</b> (base→target) and the
+            <b>egress</b> (target→base) legs. Supports incremental re-planning when threats pop up.</p></div></div>
+      <div class="stage"><div class="rail"><div class="node">6</div></div>
+        <div class="scard"><div class="st"><h4>Local refinement</h4><span class="file">smoothing.py · rrt_star.py</span></div>
+          <p>Risk-aware B-spline smoothing, or risk-aware RRT* with helicopter turn-rate and climb-rate limits
+            for a genuinely flyable nap-of-the-earth trajectory.</p></div></div>
+      <div class="stage"><div class="rail"><div class="node">7</div></div>
+        <div class="scard"><div class="st"><h4>Route metrics</h4><span class="file">route_metrics.py</span></div>
+          <p>Distance, flight time, energy/fuel proxy, integrated &amp; peak exposure, min AGL clearance,
+            climb/descent angles — per leg.</p></div></div>
+      <div class="stage"><div class="rail"><div class="node">8</div></div>
+        <div class="scard"><div class="st"><h4>Survivability &amp; mission scoring</h4><span class="file">scoring.py</span></div>
+          <p>Round-trip survivability, a fuel-budget feasibility check, and a full-sortie mission score.
+            <em>(Detail in §04–05.)</em></p></div></div>
+      <div class="stage"><div class="rail"><div class="node">9</div></div>
+        <div class="scard"><div class="st"><h4>Monte-Carlo robustness</h4><span class="file">monte_carlo.py</span></div>
+          <p>Re-scores the ingress route ~50× under random aircraft-position and threat-location/strength
+            jitter → a distribution, not a single fragile number.</p></div></div>
+      <div class="stage"><div class="rail"><div class="node">10</div></div>
+        <div class="scard"><div class="st"><h4>Visualization</h4><span class="file">visualization.py · web_export.py · analysis.py</span></div>
+          <p>Four-panel dashboard, mission scorecard, Pareto &amp; re-planning studies, and an interactive
+            browser 3D export. <em>(Every output explained in §08.)</em></p></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="num">03</span>How threat detection works</h2>
+    <p class="lede">A point in the air is "detected" by a radar only if it passes <em>every</em> gate below.
+      This is why flying low in a valley beats flying straight.</p>
+    <div class="grid2">
+      <div class="mcard"><h4>1 · Range gate</h4>
+        <p>Beyond the radar's maximum range <code>R_max</code>, detectability is exactly 0. Inside it, the
+          signal still has to clear the remaining gates.</p></div>
+      <div class="mcard"><h4>2 · Line-of-sight gate</h4>
+        <p>If terrain blocks the straight line from radar to aircraft, detectability is 0 — the aircraft is in
+          the radar's terrain shadow, regardless of range.</p></div>
+      <div class="mcard"><h4>3 · Volume gate</h4>
+        <p>Real emitters aren't perfect spheres: a horizontal <b>sector</b>, a vertical <b>cone</b>, and a
+          <b>minimum-altitude</b> floor (e.g. a SAM that can't engage low targets) further restrict where a
+          threat can see.</p></div>
+      <div class="mcard"><h4>4 · Radar-equation strength</h4>
+        <div class="formula">M(r) = intensity · 0.05 · <span class="c">(R_max / r)⁴</span></div>
+        <p>Received signal-to-noise scales as the inverse 4th power of range (the free-space radar equation).
+          Normalized so detectability is 0.05 at max range and rises steeply toward the emitter.</p></div>
+    </div>
+    <h3 class="sub">Combining multiple radars</h3>
+    <p>The probability that <em>at least one</em> radar detects you is the probabilistic union of the
+      independent per-radar detectabilities:</p>
+    <div class="formula">R(x,y,z) = <span class="c">1 − ∏<sub>i</sub> (1 − R<sub>i</sub>)</span>   →   always in [0, 1]</div>
+    <p style="color:var(--dim);font-size:.92rem">This <code>R(x,y,z)</code> field — the instantaneous
+      detection risk at every point in the airspace — is what the planner's cost, the heatmap panel, and the
+      survivability score are all built on.</p>
+  </section>
+
+  <section>
+    <h2><span class="num">04</span>How the survivability score is built</h2>
+    <p class="lede">Survivability is the probability the aircraft is <em>never</em> detected over the whole
+      sortie. Here is exactly how the number (e.g. Western Ghats: 12% vs 52%) is produced.</p>
+    <div class="steps">
+      <div class="step"><h4>Instantaneous risk along the path</h4>
+        <p>At each point of the flown trajectory, evaluate the detection field <code>R(x,y,z)</code> from §03
+          — the chance of being seen right there, right now.</p></div>
+      <div class="step"><h4>Integrate exposure over the route</h4>
+        <p>Sum that risk along the path length (trapezoidal integration) to get cumulative exposure — how much
+          "seen-ness" the whole trajectory accumulates.</p>
+        <div class="formula">R<sub>int</sub> = <span class="c">∫ R(x,y,z) · d&#8467;</span>   (over the flown path)</div></div>
+      <div class="step"><h4>Convert exposure to a survival probability</h4>
+        <p>Model detection as a Poisson process whose rate is proportional to exposure: the probability of
+          <em>zero</em> detections over the sortie is the exponential of minus the integrated rate. This is
+          the survival law the Stage-1 concept wrote as P<sub>survive</sub> = exp(−∫λ<sub>detect</sub> dt); we
+          implement its normalized form with a tunable sensitivity <code>λ = 0.05</code>.</p>
+        <div class="formula">S = <span class="c">exp(−λ · R<sub>int</sub>)</span>,   λ = 0.05</div></div>
+      <div class="step"><h4>Score the full sortie, not just one leg</h4>
+        <p>A real mission is go <em>and</em> return, so exposure is summed over both the ingress and egress
+          legs before applying the survival law:</p>
+        <div class="formula">S<sub>sortie</sub> = <span class="c">exp(−λ · (R<sub>ingress</sub> + R<sub>egress</sub>))</span></div></div>
+    </div>
+
+    <h3 class="sub">Where the exp( ) comes from</h3>
+    <p>The exponential isn't arbitrary — it falls out of one idea: <strong>to survive the whole flight you
+      must survive every little piece of it, and you multiply those survival chances together.</strong> Cut
+      the route into tiny segments; on each, the chance of being detected is small (local risk × segment
+      length × sensitivity), so the chance of surviving it is just under 1:</p>
+    <div class="formula">survive segment i  =  <span class="c">1 − λ·R<sub>i</sub>·Δ</span></div>
+    <p>Surviving the whole route means surviving segment 1 <em>and</em> 2 <em>and</em> 3 … — independent
+      events, so you multiply. Take the log (product → sum), use <code>ln(1 − x) ≈ −x</code> for small x, and
+      the sum of the little risks is exactly the integrated exposure R<sub>int</sub>:</p>
+    <div class="formula">S = ∏<sub>i</sub>(1 − λR<sub>i</sub>Δ)   →   ln S = Σ ln(1 − λR<sub>i</sub>Δ) ≈ −λ Σ R<sub>i</sub>Δ = <span class="c">−λ·R<sub>int</sub></span>   →   S = <span class="c">exp(−λ·R<sub>int</sub>)</span></div>
+    <p style="color:var(--dim);font-size:.93rem">So the exponential appears because survival <b>compounds
+      multiplicatively</b>. It also keeps the answer sane — sliding smoothly from 1 (no exposure) toward 0
+      (huge exposure) but never past either, unlike a naive "1 − total risk" which could go negative. It's the
+      same law behind radioactive decay, equipment reliability, and the Poisson "probability of zero events"
+      (here the events are radar detections, expected number = λ·R<sub>int</sub>).</p>
+
+    <div class="callout">
+      <h4>See it in one number</h4>
+      <p>A route of 3 segments, each a 10% chance of being spotted. Multiply the survivals directly:
+        <code>0.9 × 0.9 × 0.9 = 0.729</code> (72.9%). Via the formula: each segment's risk is
+        <code>−ln(0.9) = 0.105</code>, summed <code>R<sub>int</sub> = 0.315</code>, and
+        <code>exp(−0.315) = 0.729</code> — the identical 72.9%. The formula is just the multiplication done all
+        at once.</p>
+    </div>
+
+    <div class="callout">
+      <h4>Worked example — Western Ghats (Anamalai)</h4>
+      <p>The direct route flies over the auto-placed summit radar; the safe route detours through the valleys.
+        Plugging the actual round-trip exposures into <code>S = exp(−0.05·R<sub>int</sub>)</code>:</p>
+      <div class="tw"><table>
+        <thead><tr><th>Route profile</th><th>Round-trip exposure R<sub>int</sub></th><th>Survivability S = exp(−0.05·R<sub>int</sub>)</th></tr></thead>
+        <tbody>
+          <tr><td><span class="tag t-dist">Distance-focused</span></td><td class="num-col">43.31</td><td class="num-col">exp(−2.166) = <b>11.5%</b></td></tr>
+          <tr><td><span class="tag t-risk">Risk-focused</span></td><td class="num-col">13.07</td><td class="num-col">exp(−0.654) = <b>52.0%</b></td></tr>
+        </tbody>
+      </table></div>
+      <p style="margin-top:8px">Same terrain, same radars — the detour cuts exposure ~3.3× and lifts survival
+        from 12% to 52%. That gap is the entire point of the engine.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="num">05</span>Full-sortie mission score &amp; fuel budget</h2>
+    <p class="lede">Survivability alone can pick a route you can't afford. The mission score folds in fuel and
+      efficiency so the best number is a route that is survivable <em>and</em> makes it home.</p>
+    <div class="grid2">
+      <div class="mcard"><h4>Fuel budget</h4>
+        <p>One fixed onboard budget, sized as a 15% reserve over the most fuel-efficient sortie found. The
+          whole round trip (ingress + egress energy) must fit within it; a route that exceeds it is flagged
+          <span class="over">FUEL-INFEASIBLE</span> — it cannot get home.</p></div>
+      <div class="mcard"><h4>Mission composite (0–100)</h4>
+        <div class="formula">100·(0.5·S + 0.25·dist + 0.15·time + 0.10·clear) <span class="r">× fuel-factor</span></div>
+        <p>Round-trip survivability weighted highest, then efficiency and clearance. A fuel-infeasible sortie
+          is halved (<code>fuel-factor = 0.5</code>), so it can't win the headline.</p></div>
+    </div>
+    <div class="callout">
+      <h4>How the score ranks them — Western Ghats</h4>
+      <div class="tw"><table>
+        <thead><tr><th>Route</th><th>Round-trip</th><th>Survivability (I+E)</th><th>Fuel</th><th>Mission /100</th></tr></thead>
+        <tbody>
+          <tr><td><span class="tag t-dist">Distance-focused</span></td><td class="num-col">342 m</td><td class="num-col">11.5%</td><td class="ok">+13% OK</td><td class="num-col">34.9</td></tr>
+          <tr><td><span class="tag t-risk">Risk-focused</span></td><td class="num-col">402 m</td><td class="num-col">52.0%</td><td class="ok">+4% OK</td><td class="num-col"><b>51.2</b></td></tr>
+          <tr><td><span class="tag t-bal">Balanced</span></td><td class="num-col">422 m</td><td class="num-col">48.1%</td><td class="ok">+1% OK</td><td class="num-col">48.2</td></tr>
+        </tbody>
+      </table></div>
+      <p style="margin-top:8px">Here all three sorties fit the fuel budget, so survivability decides: the
+        <b>risk-focused route wins</b> (51.2) — 18% farther than the shortest, but 4.5× more likely to come home.
+        The shortest route scores worst precisely because it is barely survivable. The fuel budget is still the
+        hard gate that would <b>halve</b> any "safe" route too long to make it home — the guard a single-leg
+        planner never applies.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="num">06</span>Scenarios &amp; route profiles</h2>
+    <p class="lede">Every mission runs on a <b>real Copernicus GLO-30 DEM</b> — two built-in regions, or any
+      latitude/longitude on Earth.</p>
+    <div class="tw"><table>
+      <thead><tr><th>Region</th><th>Command</th><th>Where it's from</th></tr></thead>
+      <tbody>
+        <tr><td><b>Mount Everest / Khumbu</b></td><td><code>everest</code></td><td>Real Copernicus GLO-30, N27 E086 (Himalaya).</td></tr>
+        <tr><td><b>Western Ghats / Anamalai</b></td><td><code>ghats</code></td><td>Real Copernicus GLO-30, N10 E077 (S. India) — dominant summit → valley detour.</td></tr>
+        <tr><td><b>Any location</b></td><td><code>region --lat &lt;φ&gt; --lon &lt;λ&gt;</code></td><td>Downloads the matching Copernicus tile from the public AWS open-data bucket.</td></tr>
+      </tbody>
+    </table></div>
+
+    <h3 class="sub">Threats are placed by the terrain, not by hand</h3>
+    <p>A DEM is <em>only</em> elevation — it carries no radars. For every region the engine reads the
+      terrain and the base→target corridor and <b>auto-places</b> the threat laydown
+      (<code>auto_place_hazards</code>, <span class="file" style="display:inline">risk_field.py</span>),
+      fully deterministic:</p>
+    <ul style="color:var(--dim);max-width:74ch;line-height:1.75">
+      <li><b style="color:var(--ink)">Search Radar (summit)</b> — the tallest ridge/summit sitting on or near
+        the direct corridor, so it commands the straight-line path and forces a detour.</li>
+      <li><b style="color:var(--ink)">Sector Radar (ridge)</b> — a second dominant summit set well apart from
+        the first, its coverage arc aimed at the corridor midpoint.</li>
+      <li><b style="color:var(--ink)">SAM (corridor)</b> — high ground commanding the corridor midpoint (kept
+        clear of the radars), with a minimum-engagement-altitude floor it is blind below.</li>
+    </ul>
+    <p style="color:var(--dim);font-size:.92rem">Each emitter's max range scales with the region's vertical
+      relief, so a summit radar can still reach aircraft down in the valleys — divergence between routes then
+      comes from <b>terrain masking</b> (hiding behind ridges), the tactic the engine exists to demonstrate.</p>
+    <h3 class="sub">Three route profiles (one planner, three risk weights)</h3>
+    <div class="tw"><table>
+      <thead><tr><th>Profile</th><th>Risk weight</th><th>Behaviour</th></tr></thead>
+      <tbody>
+        <tr><td><span class="tag t-dist">Distance-focused</span></td><td><code>w_risk = 0</code></td><td>Shortest; ignores threats.</td></tr>
+        <tr><td><span class="tag t-risk">Risk-focused</span></td><td><code>w_risk = 6</code></td><td>Safest; accepts long detours.</td></tr>
+        <tr><td><span class="tag t-bal">Balanced</span></td><td><code>w_risk = 4</code></td><td>The operational compromise.</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <h2><span class="num">07</span>Run book</h2>
+    <p class="lede">From <code>D:\Projects\AerXlabs\AerX_Prototype</code>. Call the venv Python directly — no
+      environment activation needed. Every run writes a fresh timestamped folder; every figure is stamped with
+      its generation time.</p>
+    <div class="run">
+      <div class="runrow"><span class="lbl">A built-in region — full suite</span>
+        <code>.venv\Scripts\python.exe main.py ghats</code>
+        <span class="say">Scorecard + dashboard + Pareto + re-planning + Plotly 3D + CesiumJS globe, into <code style="color:var(--dim);background:none;border:0;padding:0;display:inline">results\ghats\&lt;timestamp&gt;\</code>. Use <code style="color:var(--dim);background:none;border:0;padding:0;display:inline">everest</code> for the other region.</span></div>
+      <div class="runrow"><span class="lbl">Any location on Earth</span>
+        <code>.venv\Scripts\python.exe main.py region --lat 34.1 --lon 74.8 --label kashmir</code>
+        <span class="say">Downloads the Copernicus tile, auto-picks a relief window, runs the full suite into <code style="color:var(--dim);background:none;border:0;padding:0;display:inline">results\kashmir\&lt;timestamp&gt;\</code>.</span></div>
+      <div class="runrow"><span class="lbl">Fast iteration</span>
+        <code>.venv\Scripts\python.exe main.py ghats --quick</code>
+        <span class="say">Scorecard + dashboard only (skips Pareto, re-planning, Plotly, Cesium).</span></div>
+      <div class="runrow"><span class="lbl">Open the CesiumJS 3D globe</span>
+        <code>.venv\Scripts\python.exe serve_viewer.py</code>
+        <span class="say">Serves the newest <code style="color:var(--dim);background:none;border:0;padding:0;display:inline">*_cesium.html</code> over http and opens it. Left-drag orbits · scroll zooms · middle-drag pans.</span></div>
+      <div class="runrow"><span class="lbl">Unit tests</span>
+        <code>.venv\Scripts\python.exe -m unittest discover tests</code>
+        <span class="say">Expect <b>Ran 15 tests … OK</b>.</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="num">08</span>Every output, explained</h2>
+    <p class="lede">What each product is, and what you actually learn from it.</p>
+    <div class="out">
+      <div class="ocard"><span class="k">…_dashboard.png</span>
+        <h4>Four-panel tactical dashboard</h4>
+        <p>The at-a-glance operational picture. Four panels:</p>
+        <ul>
+          <li><b>3D battlefield</b> — the terrain surface, radar coverage rings, and the flight tubes in space. Ingress = solid, egress = dashed; overlapping profiles are fanned apart so all are visible.</li>
+          <li><b>2D threat field</b> — a top-down heatmap of detection risk with terrain shadows; shows <b>where</b> it's dangerous and how each route threads the safe corridors.</li>
+          <li><b>Nap-of-the-Earth profile</b> — altitude vs along-track distance, with the ground, the min-clearance floor, and a threat-exposure band; shows how low the aircraft hugs terrain.</li>
+          <li><b>Monte-Carlo robustness</b> — mean score with P5–P95 whiskers over benchmark zones; shows whether a route is robustly good or only good on paper.</li>
+        </ul></div>
+      <div class="ocard"><span class="k">…_scorecard.png</span>
+        <h4>Mission scorecard</h4>
+        <p>The numbers, for a design review. A full per-leg metrics table, a <b>Full-Sortie</b> table
+          (round-trip distance, survivability I+E, fuel used vs budget, colour-coded OK/OVER, mission score),
+          a summary bar chart, and a glossary defining every metric.</p></div>
+      <div class="ocard"><span class="k">…_pareto.png</span>
+        <h4>Pareto risk-weight sensitivity study</h4>
+        <p>Answers "how much should I weight safety?" It sweeps the risk weight <code>w_risk</code> across many
+          values (0, 0.5, 1, 2, … 12) and re-plans a route for each. Two graphs:</p>
+        <ul>
+          <li><b>Left — the Pareto front.</b> Each dot is one <code>w_risk</code> setting; x = total distance, y = integrated exposure, colour = the weight. As the weight rises the dots move down-and-right: you <b>buy safety with distance</b>. The dashed line is the trade-off frontier; its "knee" is the best value.</li>
+          <li><b>Right — response curves.</b> The same sweep as two lines vs <code>w_risk</code>: exposure (red, falling) and distance (cyan, rising) on twin axes. Shows the crossover and the point of <b>diminishing returns</b> (past ~6, more weight buys almost no extra safety).</li>
+        </ul></div>
+      <div class="ocard"><span class="k">…_replanning.png</span>
+        <h4>Incremental re-planning demo</h4>
+        <p>Injects a pop-up threat onto a flown route and repairs it with D* Lite. Shows the original vs
+          re-planned route and the expansion-count comparison — the concrete justification for D* Lite over a
+          one-shot planner (≈ 3.4× cheaper to repair than to re-plan from scratch).</p></div>
+      <div class="ocard"><span class="k">…_3d.html</span>
+        <h4>Interactive browser 3D</h4>
+        <p>A self-contained web page you open in any browser. Unlike a fixed PNG, you can <b>rotate, zoom, and
+          pan</b> the real terrain with the routes in true 3D, and toggle individual profiles / ingress /
+          egress in the legend. It's how you actually verify a route hugs the valley, clears a ridge, or
+          hides behind a summit — spatial relationships a flat image can't convey. Ideal for a live briefing.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="num">09</span>Algorithms — and what we don't use</h2>
+    <div class="grid2">
+      <div class="mcard"><h4>Global · D* Lite</h4>
+        <p>An incremental optimal graph search. Chosen because it <b>repairs</b> a plan cheaply when the map
+          changes (a pop-up threat) instead of restarting — and it returns the true minimum-cost path.</p></div>
+      <div class="mcard"><h4>Local · risk-aware RRT*</h4>
+        <p>A sampling refiner with turn-rate and climb-rate limits, informed-tube sampling, and risk-aware
+          shortcutting — turns the grid route into a flyable nap-of-the-earth trajectory.</p></div>
+    </div>
+    <div class="callout">
+      <h4>Are you using RTA*?  — No.</h4>
+      <p><b>RTA* (Real-Time A*, Korf 1990)</b> is a real-time <em>agent</em> search that commits to a move
+        under a fixed lookahead, trading optimality for a bounded per-step deadline. This engine instead uses
+        <b>D* Lite</b>, which computes the full optimal route and repairs it incrementally — the right fit for
+        mission planning, where we want the best route and cheap replanning, not a per-step reflex.</p>
+      <p>We also do <b>not</b> use the reference paper's real-time <b>MPC</b> control layer; that online
+        receding-horizon controller is noted as future work. Reinforcement learning is likewise out of scope
+        for this prototype.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="num">10</span>Data &amp; references</h2>
+    <ul style="color:var(--dim);max-width:70ch;line-height:1.8">
+      <li><b style="color:var(--ink)">Real terrain:</b> Copernicus GLO-30 (~30 m) DEM tiles from the public AWS open-data bucket — built-in N27 E086 (Everest/Khumbu) and N10 E077 (Western Ghats/Anamalai), plus any latitude/longitude on demand. Real morphology; elevation normalized into planning units.</li>
+      <li><b style="color:var(--ink)">Threats:</b> auto-placed from each region's own ridgelines and the mission corridor (§06) — deterministic, no hand tuning.</li>
+      <li><b style="color:var(--ink)">Method references:</b> Risk-A* &amp; terrain-masking radar model (Drones 2026, 10, 469); D*+ risk-aware incremental planning (arXiv 2112.05563); risk-aware planning in unknown environments (J. Intell. Robot. Syst. 2025); survival-law P<sub>survive</sub> = exp(−∫λ<sub>detect</sub> dt) from the project's own Stage-1 concept submission.</li>
+      <li><b style="color:var(--ink)">No specific aircraft:</b> the engine models a generic low-flying platform — all distances, speeds, fuel, and RCS are <b>normalized planning proxies</b>, not the parameters of any real airframe (calibration to a specific platform is future work).</li>
+    </ul>
+  </section>
+
+  <p class="foot">
+    <b>Safety framing.</b> All hazards are generic simulated sensors with normalized, illustrative parameters —
+    no real operational RCS, weapon, or radar values. Elevation from real tiles is normalized to planning
+    units. Results are planning-level research-simulation estimates, not operationally deployable. ·
+    AerX Labs Advanced Aerospace Systems Challenge 2026.
+  </p>
+
+</div>

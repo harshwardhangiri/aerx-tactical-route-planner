@@ -1,0 +1,15 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Generated run outputs (regenerate with `python main.py <region>`)
+results/
+
+# Large real DEM tiles (~40 MB each; re-download on demand on first run)
+data/terrain/*.tif
+
+# Scratch / temp
+scratch_txt/
+*.tmp
