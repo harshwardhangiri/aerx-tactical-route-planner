@@ -12,7 +12,8 @@ from src.risk_field import (
     compute_hazard_attenuation,
     compute_point_risk,
     compute_risk_slice,
-    create_demo_hazards
+    create_demo_hazards,
+    Z_RISK_SCALE,
 )
 
 
@@ -41,11 +42,15 @@ class TestRiskField(unittest.TestCase):
         self.assertAlmostEqual(compute_hazard_attenuation(5.0, r, intensity=1.0, decay_type="gaussian"), np.exp(-0.75), places=5)
 
     def test_point_risk_in_range_clear_los(self):
-        """Points within range and high altitude (clear LOS) must receive expected risk."""
+        """Points within range and high altitude (clear LOS) must receive expected risk.
+        The vertical separation is de-weighted by Z_RISK_SCALE in the range gate, so
+        the effective distance is 15*Z_RISK_SCALE."""
         hazard = HazardSite(x=50.0, y=50.0, z=150.0, radius=30.0, intensity=1.0, decay_type="linear")
-        point = (50.0, 50.0, 165.0)  # distance = 15, linear decay = 1 - 15/30 = 0.5
+        point = (50.0, 50.0, 165.0)  # dz = 15 -> effective 15*Z_RISK_SCALE
+        eff_dist = 15.0 * Z_RISK_SCALE
+        expected = 1.0 - eff_dist / 30.0  # linear decay at the effective distance
         risk = compute_point_risk(point, [hazard], terrain=self.terrain, apply_los=True)
-        self.assertAlmostEqual(risk, 0.5, places=2)
+        self.assertAlmostEqual(risk, expected, places=2)
 
     def test_terrain_masking_blocks_risk(self):
         """Points geometrically behind a mountain peak must have 0 risk when apply_los=True."""

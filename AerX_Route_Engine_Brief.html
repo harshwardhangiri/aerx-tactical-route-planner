@@ -266,7 +266,7 @@
   <section>
     <h2><span class="num">04</span>How the survivability score is built</h2>
     <p class="lede">Survivability is the probability the aircraft is <em>never</em> detected over the whole
-      sortie. Here is exactly how the number (e.g. Western Ghats: 12% vs 52%) is produced.</p>
+      sortie. Here is exactly how the number (e.g. Western Ghats: 34% vs 69%) is produced.</p>
     <div class="steps">
       <div class="step"><h4>Instantaneous risk along the path</h4>
         <p>At each point of the flown trajectory, evaluate the detection field <code>R(x,y,z)</code> from §03
@@ -319,12 +319,12 @@
       <div class="tw"><table>
         <thead><tr><th>Route profile</th><th>Round-trip exposure R<sub>int</sub></th><th>Survivability S = exp(−0.05·R<sub>int</sub>)</th></tr></thead>
         <tbody>
-          <tr><td><span class="tag t-dist">Distance-focused</span></td><td class="num-col">43.31</td><td class="num-col">exp(−2.166) = <b>11.5%</b></td></tr>
-          <tr><td><span class="tag t-risk">Risk-focused</span></td><td class="num-col">13.07</td><td class="num-col">exp(−0.654) = <b>52.0%</b></td></tr>
+          <tr><td><span class="tag t-dist">Distance-focused</span></td><td class="num-col">21.72</td><td class="num-col">exp(−1.086) = <b>33.8%</b></td></tr>
+          <tr><td><span class="tag t-risk">Risk-focused</span></td><td class="num-col">7.41</td><td class="num-col">exp(−0.371) = <b>69.0%</b></td></tr>
         </tbody>
       </table></div>
-      <p style="margin-top:8px">Same terrain, same radars — the detour cuts exposure ~3.3× and lifts survival
-        from 12% to 52%. That gap is the entire point of the engine.</p>
+      <p style="margin-top:8px">Same terrain, same radars — the detour cuts exposure ~2.9× and lifts survival
+        from 34% to 69%. That gap is the entire point of the engine.</p>
     </div>
   </section>
 
@@ -347,14 +347,14 @@
       <div class="tw"><table>
         <thead><tr><th>Route</th><th>Round-trip</th><th>Survivability (I+E)</th><th>Fuel</th><th>Mission /100</th></tr></thead>
         <tbody>
-          <tr><td><span class="tag t-dist">Distance-focused</span></td><td class="num-col">342 m</td><td class="num-col">11.5%</td><td class="ok">+13% OK</td><td class="num-col">34.9</td></tr>
-          <tr><td><span class="tag t-risk">Risk-focused</span></td><td class="num-col">402 m</td><td class="num-col">52.0%</td><td class="ok">+4% OK</td><td class="num-col"><b>51.2</b></td></tr>
-          <tr><td><span class="tag t-bal">Balanced</span></td><td class="num-col">422 m</td><td class="num-col">48.1%</td><td class="ok">+1% OK</td><td class="num-col">48.2</td></tr>
+          <tr><td><span class="tag t-dist">Distance-focused</span></td><td class="num-col">341 m</td><td class="num-col">33.8%</td><td class="ok">+13% OK</td><td class="num-col">46.1</td></tr>
+          <tr><td><span class="tag t-risk">Risk-focused</span></td><td class="num-col">425 m</td><td class="num-col">69.0%</td><td class="ok">+4% OK</td><td class="num-col"><b>58.6</b></td></tr>
+          <tr><td><span class="tag t-bal">Balanced</span></td><td class="num-col">425 m</td><td class="num-col">69.0%</td><td class="ok">+4% OK</td><td class="num-col"><b>58.6</b></td></tr>
         </tbody>
       </table></div>
       <p style="margin-top:8px">Here all three sorties fit the fuel budget, so survivability decides: the
-        <b>risk-focused route wins</b> (51.2) — 18% farther than the shortest, but 4.5× more likely to come home.
-        The shortest route scores worst precisely because it is barely survivable. The fuel budget is still the
+        <b>risk-focused route wins</b> (58.6) — 25% farther than the shortest, but ~2× more likely to come home.
+        The shortest route scores worst precisely because it is the most exposed. The fuel budget is still the
         hard gate that would <b>halve</b> any "safe" route too long to make it home — the guard a single-leg
         planner never applies.</p>
     </div>
@@ -386,9 +386,12 @@
       <li><b style="color:var(--ink)">SAM (corridor)</b> — high ground commanding the corridor midpoint (kept
         clear of the radars), with a minimum-engagement-altitude floor it is blind below.</li>
     </ul>
-    <p style="color:var(--dim);font-size:.92rem">Each emitter's max range scales with the region's vertical
-      relief, so a summit radar can still reach aircraft down in the valleys — divergence between routes then
-      comes from <b>terrain masking</b> (hiding behind ridges), the tactic the engine exists to demonstrate.</p>
+    <p style="color:var(--dim);font-size:.92rem">Each emitter's detection range is <b>auto-calibrated to the
+      terrain</b>: it is scaled until the direct base→target corridor carries a comparable threat exposure in
+      every region, so the shortest path is always genuinely threatened <em>and</em> a survivable detour always
+      exists — the survivability spread (the best-route signal) never collapses. The range geometry de-weights
+      the exaggerated vertical of the normalized DEM, giving each radar a realistic horizontal footprint;
+      divergence between routes then comes from <b>leaving that footprint and hiding behind terrain</b>.</p>
     <h3 class="sub">Three route profiles (one planner, three risk weights)</h3>
     <div class="tw"><table>
       <thead><tr><th>Profile</th><th>Risk weight</th><th>Behaviour</th></tr></thead>

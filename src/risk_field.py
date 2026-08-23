@@ -98,6 +98,17 @@ class HazardSite:
 # detection-threshold calibration Metric(R_max, sigma_ref) = eta (Eq. 28).
 RADAR_BOUNDARY_DETECTABILITY = 0.05
 
+# Vertical weight for the detection-range geometry. Real terrain is normalized to a
+# fixed planning band ([90,350] over a ~120-cell grid), which exaggerates vertical
+# relief ~2x relative to the horizontal. Left uncorrected, the 3D slant range is
+# vertical-dominated and a summit radar becomes all-or-nothing (covers the whole
+# crop, or nothing). Counting the vertical component at this reduced weight in the
+# RANGE gate restores a proper horizontal detection footprint — a summit radar
+# reaches nearby valley aircraft but distant ones escape by range — so routes keep
+# real dynamic range (a discernible best route) in every region. Angular gates
+# (elevation cone in HazardSite.covers) still use the true geometry.
+Z_RISK_SCALE = 0.35
+
 # Per-threat-type lethality weight applied to the detection hazard rate. Generic,
 # normalized values (not operational): a surface-to-air missile site is treated as
 # more lethal than a search radar, which is more lethal than short-range AAA once
@@ -236,7 +247,7 @@ def compute_point_risk(
         haz_pos = hazard.get_position(terrain)
         dx = x - haz_pos[0]
         dy = y - haz_pos[1]
-        dz = z - haz_pos[2]
+        dz = (z - haz_pos[2]) * Z_RISK_SCALE   # de-weight vertical (see Z_RISK_SCALE)
         dist = np.sqrt(dx * dx + dy * dy + dz * dz)
 
         if dist >= hazard.radius:
@@ -483,31 +494,52 @@ def auto_place_hazards(terrain: np.ndarray, start_xy, goal_xy) -> List[HazardSit
     def bearing_to(pt, target):
         return float(np.degrees(np.arctan2(target[1] - pt[1], target[0] - pt[0])) % 360.0)
 
-    # Max slant range. Terrain is normalized to a fixed planning band, so a summit
-    # emitter stands a large, roughly constant number of planning-Z units above the
-    # valley-flying aircraft; the range gate uses the full 3D slant, so R must span
-    # that vertical gap to actually threaten the flown route. Sized off the
-    # relief-aware diagonal — big enough to reach valley routes near the corridor,
-    # so divergence then comes from TERRAIN MASKING (hiding behind ridges).
-    relief = float(terrain.max() - terrain.min())
-    R = 0.70 * float(np.hypot(span, 0.5 * relief))
-    hazards = [
-        HazardSite(
-            x=float(primary[0]), y=float(primary[1]), z=None, mast_height=12.0,
-            radius=1.05 * R, intensity=0.96, requires_los=True, decay_type="radar",
-            threat_type="radar", name="Search Radar (summit)"),
-        HazardSite(
-            x=float(secondary[0]), y=float(secondary[1]), z=None, mast_height=12.0,
-            radius=0.9 * R, intensity=0.92, requires_los=True, decay_type="radar",
-            threat_type="radar", azimuth_center=bearing_to(secondary, mid),
-            azimuth_width=150.0, name="Sector Radar (ridge)"),
-        HazardSite(
-            x=float(sam_xy[0]), y=float(sam_xy[1]), z=None, mast_height=8.0,
-            radius=1.12 * R, intensity=0.9, requires_los=True, decay_type="radar",
-            threat_type="sam", min_detect_alt=float(terrain.min()) + 90.0,
-            name="SAM (corridor)"),
-    ]
-    return hazards
+    # Build the three emitters for a given max-range R (dx,dy in cells, dz in
+    # planning units — the range gate uses the full 3D slant on the same scale).
+    def make_hazards(Rval):
+        return [
+            HazardSite(
+                x=float(primary[0]), y=float(primary[1]), z=None, mast_height=12.0,
+                radius=1.05 * Rval, intensity=0.96, requires_los=True, decay_type="radar",
+                threat_type="radar", name="Search Radar (summit)"),
+            HazardSite(
+                x=float(secondary[0]), y=float(secondary[1]), z=None, mast_height=12.0,
+                radius=0.9 * Rval, intensity=0.92, requires_los=True, decay_type="radar",
+                threat_type="radar", azimuth_center=bearing_to(secondary, mid),
+                azimuth_width=150.0, name="Sector Radar (ridge)"),
+            HazardSite(
+                x=float(sam_xy[0]), y=float(sam_xy[1]), z=None, mast_height=8.0,
+                radius=1.12 * Rval, intensity=0.9, requires_los=True, decay_type="radar",
+                threat_type="sam", min_detect_alt=float(terrain.min()) + 90.0,
+                name="SAM (corridor)"),
+        ]
+
+    # Range calibration. With the vertical de-weighting (Z_RISK_SCALE) the range is
+    # a genuine horizontal footprint, but the direct corridor's exposure still
+    # varies by region (some terrain funnels the base→target line through more
+    # threatened ground). Scale the range down until the straight corridor at cruise
+    # altitude carries a comparable target exposure — so EVERY region ends up with
+    # the same "direct path is threatened, a survivable detour exists" balance, and
+    # the survivability spread (the best-route signal) never collapses to all-0%.
+    AGL = 55.0
+    ts = np.linspace(0.0, 1.0, 26)
+    line = [(sx + t * (gx - sx), sy + t * (gy - sy)) for t in ts]
+    alts = [terrain_height(terrain, x, y) + AGL for (x, y) in line]
+    seg = dlen / (len(ts) - 1)
+
+    def corridor_exposure(hz):
+        rs = [compute_point_risk((x, y, a), hz, terrain=terrain, apply_los=True, los_samples=12)
+              for (x, y), a in zip(line, alts)]
+        return float(sum(0.5 * (rs[i] + rs[i + 1]) * seg for i in range(len(rs) - 1)))
+
+    base_R = 0.60 * span
+    TARGET = 56.0
+    R = base_R
+    for scale in (1.0, 0.86, 0.72, 0.60, 0.50, 0.42, 0.34):
+        R = base_R * scale
+        if corridor_exposure(make_hazards(R)) <= TARGET:
+            break
+    return make_hazards(R)
 
 
 def _finalize_real_dem(raw: np.ndarray, title: str, desc: str):
