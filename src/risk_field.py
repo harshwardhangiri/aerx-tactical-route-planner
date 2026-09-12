@@ -542,12 +542,28 @@ def auto_place_hazards(terrain: np.ndarray, start_xy, goal_xy) -> List[HazardSit
     return make_hazards(R)
 
 
+# Real-world scale of the most recently loaded DEM crop (metres/cell is fixed by
+# the Copernicus 30 m/px crop geometry: 600 px over 120 out-cells = 150 m/cell;
+# the vertical relief is captured per region). Read via get_last_region_scale().
+_LAST_REGION_SCALE = {"meters_per_cell": 150.0, "relief_m": 1000.0,
+                      "elev_min_m": 0.0, "znorm_base": 90.0, "znorm_span": 260.0}
+
+
+def get_last_region_scale() -> dict:
+    """Real-world scale (metres/cell, real relief, base elevation) of the last DEM
+    loaded via load_mission_scenario(). Used by the aircraft calibration layer."""
+    return dict(_LAST_REGION_SCALE)
+
+
 def _finalize_real_dem(raw: np.ndarray, title: str, desc: str):
     """
     Shared real-DEM scenario construction: normalize elevation into planning
     units (preserving morphology), auto-place terrain-driven threats, and set
     terrain-adaptive ingress/egress and altitude layers.
     """
+    _LAST_REGION_SCALE.update(
+        meters_per_cell=150.0, relief_m=float(raw.max() - raw.min()),
+        elev_min_m=float(raw.min()), znorm_base=90.0, znorm_span=260.0)
     terrain = 90.0 + 260.0 * (raw - raw.min()) / (raw.max() - raw.min() + 1e-9)
     ny, nx = terrain.shape
     sx, sy = 0.10 * (nx - 1), 0.12 * (ny - 1)

@@ -24,7 +24,9 @@ configure_matplotlib(interactive=False)
 
 import numpy as np
 
-from src.risk_field import load_mission_scenario, set_custom_dem
+from src.risk_field import load_mission_scenario, set_custom_dem, get_last_region_scale
+from src.aircraft import (get_aircraft, RegionScale, realize_sortie,
+                          kinematic_limits_for_grid, AIRCRAFT)
 from src.planning_grid import CostWeights, PlanningGrid3D
 from src.dstar_lite import DStarLite3D
 from src.smoothing import smooth_trajectory
@@ -43,6 +45,13 @@ _SCENARIO_CACHE = {}
 # Local-refinement mode ("none" = B-spline smoothing, "rrt" = risk-aware RRT*).
 # Set from the --refine CLI flag before solving.
 REFINE_MODE = "none"
+
+# Selected aircraft profile (real speed/fuel/turn/climb/RCS). Set from --aircraft.
+AIRCRAFT_KEY = "scout_heli"
+
+# Global planner ("dstar" = D* Lite incremental search, "rrt" = from-scratch
+# risk-aware RRT*). Set from --planner. RRT falls back to D* Lite if it fails.
+PLANNER_MODE = "dstar"
 
 
 def solve_mission_scenario(scenario_key: str = "dem", scorecard_dir: str = "results/figures"):
@@ -63,6 +72,17 @@ def solve_mission_scenario(scenario_key: str = "dem", scorecard_dir: str = "resu
     # 1. Load Scenario Environment
     terrain, hazards, start_pos, goal_pos, z_layers, title, desc = load_mission_scenario(scenario_key)
     ny, nx = terrain.shape
+
+    # Real-world calibration: the DEM's true scale (m/cell, real relief) + the
+    # selected aircraft profile, so every reported number is a physical value.
+    region_scale = RegionScale(**get_last_region_scale())
+    aircraft = get_aircraft(AIRCRAFT_KEY)
+    print(f"\n[Aircraft] {aircraft.name} ({aircraft.kind}) | cruise {aircraft.cruise_speed:.0f} m/s | "
+          f"climb {aircraft.climb_rate:.1f} m/s | turn radius {aircraft.turn_radius():.0f} m | "
+          f"endurance {aircraft.endurance_s()/60:.0f} min | RCS {aircraft.rcs_m2:.1f} m^2")
+    print(f"[Scale] {region_scale.meters_per_cell:.0f} m/cell | real relief "
+          f"{region_scale.relief_m:.0f} m ({region_scale.elev_min_m:.0f}-"
+          f"{region_scale.elev_min_m + region_scale.relief_m:.0f} m ASL)")
 
     # Baseline "direct" distance between the grid-snapped start and goal actually
     # used by the planner, so every route's Detour % is >= 0 (a flyable path can
@@ -118,32 +138,56 @@ def solve_mission_scenario(scenario_key: str = "dem", scorecard_dir: str = "resu
 
     routes_data = {}
 
+    def _plan_raw(a, b, weights, label):
+        """Plan one leg a->b as (N,3) grid coords, via D* Lite or from-scratch RRT*
+        (with D* Lite fallback). Honors the profile's risk weight either way."""
+        base_grid.weights = weights
+        if PLANNER_MODE == "rrt":
+            from src.rrt_star import plan_global_rrt_star, RRTStarConfig
+            print(f"    [>] {label}: from-scratch RRT* planner...", end="", flush=True)
+            c = RRTStarConfig(max_iterations=6000, step_size=11.0, neighbor_radius=20.0,
+                              goal_sample_rate=0.12, goal_tolerance=9.0)
+            c.max_turn_deg, c.max_climb_rate = kinematic_limits_for_grid(
+                aircraft, region_scale, c.step_size)
+            zb = (float(z_layers.min()), float(z_layers.max()))
+            rp = plan_global_rrt_star(a, b, terrain, hazards, zb,
+                                      risk_weight=max(weights.w_risk, 0.1) * 8.0,
+                                      config=c, risk_sampler=base_grid.risk_at)
+            if rp is not None and len(rp) >= 2:
+                print(" [OK]", flush=True)
+                return rp
+            print(" [fell back to D* Lite]", flush=True)
+        p = DStarLite3D(base_grid)
+        dp = p.plan(a, b)
+        return p.get_path_coordinates(dp) if dp is not None else None
+
     for name, weights in profiles:
         print(f"\n  --- Profile: {name} ---", flush=True)
-        base_grid.weights = weights
-        planner = DStarLite3D(base_grid)
+        if PLANNER_MODE != "rrt":
+            print("    [>] Computing D* Lite global trajectory...", end="", flush=True)
+        raw_coords = _plan_raw(start_pos, goal_pos, weights, "ingress")
+        if PLANNER_MODE != "rrt":
+            print(" [OK]", flush=True)
 
-        print("    [>] Computing D* Lite global trajectory...", end="", flush=True)
-        discrete_path = planner.plan(start_pos, goal_pos)
-        print(" [OK]", flush=True)
-
-        if discrete_path is None:
+        if raw_coords is None:
             print(f"    [!] Warning: No feasible path for {name}", flush=True)
             continue
-
-        raw_coords = planner.get_path_coordinates(discrete_path)
         smooth_coords = smooth_trajectory(
             raw_coords, terrain, num_points=120, min_agl=15.0, hazards=hazards,
             risk_sampler=base_grid.risk_at
         )
 
-        # Optional risk-aware RRT* local refinement of the global route.
+        # Optional risk-aware RRT* local refinement of the global route, with the
+        # turn-rate/climb limits derived from the selected aircraft's real turn
+        # radius and climb rate (via the DEM scale).
         if REFINE_MODE == "rrt":
             from src.rrt_star import refine_with_rrt_star, RRTStarConfig
             print("    [>] Refining with risk-aware RRT*...", end="", flush=True)
+            _cfg = RRTStarConfig(max_iterations=900)
+            _cfg.max_turn_deg, _cfg.max_climb_rate = kinematic_limits_for_grid(
+                aircraft, region_scale, _cfg.step_size)
             refined = refine_with_rrt_star(
-                raw_coords, terrain, hazards,
-                RRTStarConfig(max_iterations=900), risk_sampler=base_grid.risk_at
+                raw_coords, terrain, hazards, _cfg, risk_sampler=base_grid.risk_at
             )
             if refined is not None and len(refined) >= 2:
                 smooth_coords = smooth_trajectory(
@@ -161,12 +205,10 @@ def solve_mission_scenario(scenario_key: str = "dem", scorecard_dir: str = "resu
         # egress path can differ from the ingress path — the ingress/egress
         # asymmetry the concept document calls for.
         print("    [>] Computing egress (return) trajectory...", end="", flush=True)
-        egress_planner = DStarLite3D(base_grid)
-        egress_discrete = egress_planner.plan(goal_pos, start_pos)
+        egress_raw = _plan_raw(goal_pos, start_pos, weights, "egress")
         egress_smooth = None
         egress_metrics = None
-        if egress_discrete is not None:
-            egress_raw = egress_planner.get_path_coordinates(egress_discrete)
+        if egress_raw is not None:
             egress_smooth = smooth_trajectory(
                 egress_raw, terrain, num_points=120, min_agl=15.0, hazards=hazards,
                 risk_sampler=base_grid.risk_at
@@ -203,6 +245,10 @@ def solve_mission_scenario(scenario_key: str = "dem", scorecard_dir: str = "resu
     fuel_budget = apply_fuel_budget(round_trips)
     for r in routes_data.values():
         r["mission_score"] = compute_mission_score(r["round_trip"], direct_euclidean_distance=direct_dist)
+        legs = [r["smooth_coords"]]
+        if r.get("egress_smooth_coords") is not None:
+            legs.append(r["egress_smooth_coords"])
+        r["real"] = realize_sortie(legs, terrain, region_scale, aircraft)
 
     # 4c. Full-sortie Monte-Carlo robustness (perturb both legs + shared threats,
     #     score the mission against the fixed fuel budget).
@@ -232,6 +278,24 @@ def solve_mission_scenario(scenario_key: str = "dem", scorecard_dir: str = "resu
             f"{name:<18} | {rt.total_distance:<8.1f} | {rt.total_time:<8.1f} | "
             f"{rt.total_integrated_risk:<8.2f} | {rt.survivability*100:<8.1f}% | "
             f"{rt.fuel_used:<9.1f} | {fuel_str:<11} | {ms.composite_score:<8.1f}"
+        )
+    print("=" * 104)
+
+    # 5b. Real-world view for the selected aircraft (physical units).
+    print("\n" + "=" * 104)
+    print(f"          REAL-WORLD SORTIE - {aircraft.name} over {scenario_key.upper()} "
+          f"(fuel capacity {aircraft.fuel_capacity_kg:.0f} kg, ceiling {aircraft.service_ceiling:.0f} m)")
+    print("=" * 104)
+    print(f"{'Route Profile':<18} | {'Dist (km)':<9} | {'Time (min)':<10} | {'Fuel (kg)':<10} | "
+          f"{'Fuel %':<7} | {'Min AGL':<9} | {'Max alt':<9} | {'Feasible':<10}")
+    print("-" * 104)
+    for name, r in routes_data.items():
+        rs = r["real"]
+        feasible = "OK" if (rs.within_endurance and rs.within_ceiling) else \
+                   ("FUEL" if not rs.within_endurance else "CEILING")
+        print(
+            f"{name:<18} | {rs.distance_km:<9.1f} | {rs.time_min:<10.1f} | {rs.fuel_kg:<10.1f} | "
+            f"{rs.fuel_pct:<7.0f} | {rs.min_agl_m:<9.0f} | {rs.max_alt_m:<9.0f} | {feasible:<10}"
         )
     print("=" * 104)
 
@@ -361,10 +425,16 @@ def main():
                         help="Scorecard + dashboard only (skip Pareto, replanning, Plotly, Cesium).")
     parser.add_argument("--refine", choices=["none", "rrt"], default="none",
                         help="Local refinement: 'none' (B-spline) or 'rrt' (risk-aware RRT*).")
+    parser.add_argument("--aircraft", default="scout_heli", choices=list(AIRCRAFT.keys()),
+                        help="Aircraft profile for real speed/fuel/turn/climb/RCS (default: scout_heli).")
+    parser.add_argument("--planner", choices=["dstar", "rrt"], default="dstar",
+                        help="Global planner: 'dstar' (D* Lite) or 'rrt' (from-scratch RRT*).")
     args = parser.parse_args()
 
-    global REFINE_MODE
+    global REFINE_MODE, AIRCRAFT_KEY, PLANNER_MODE
     REFINE_MODE = args.refine
+    AIRCRAFT_KEY = args.aircraft
+    PLANNER_MODE = args.planner
 
     print("=" * 78)
     print("      AerX Labs — Threat-Aware Tactical Mission Planning Engine")

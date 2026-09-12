@@ -81,12 +81,14 @@ Run it live: `python serve_viewer.py` serves the newest viewer over http and ope
 3. **Radar-Equation Detectability & 3D Threat Volumes**: Normalized inverse-R⁴ radar-equation detectability, range-gated and LOS-gated, aggregated by probabilistic union. Threats are full **3D detection volumes** — horizontal coverage sectors, vertical cones, minimum-detection-altitude floors — and typed (`radar`/`sam`/`aaa`) with per-type lethality weighting.
 4. **Hard-Feasibility / Soft-Risk Planning**: Optional detection-threshold that marks over-exposed nodes as hard keep-outs (not just costs), implementing the hard-feasibility formulation of Drones 2026, 10, 469.
 5. **Layered 3D Planning State Space**: Enforces AGL clearances and kinematic climb-slope limits; fast trilinear risk lookup for inner loops.
-6. **D* Lite 3D Global Planner**: Incremental graph search with multi-objective cost, supporting **incremental replanning** for pop-up threats (the `*_replanning.png` demo, produced every run).
-7. **Local Trajectory Refinement**: Risk-aware LOS pruning + B-spline smoothing, or **risk-aware RRT\*** with informed-tube sampling, risk-aware shortcutting, and **helicopter kinematic limits** (max turn-rate + climb-rate for NOE flight) (`--refine rrt`).
-8. **Mission Performance & Survivability Scoring**: Travel time, energy proxies, cumulative/peak risk, survivability \(S_{\text{surv}} = e^{-\kappa R}\), and composite scores.
-9. **Monte Carlo Robustness Analysis**: Stochastic evaluation under tracking/hazard-estimation perturbations.
-10. **Sensitivity / Pareto Study**: Sweeps the risk weight and traces the distance-vs-exposure trade-off front (the `*_pareto.png` study, produced every run).
-11. **Visualization**: Multi-panel Matplotlib dashboard (elevation-shaded 3D terrain, radar-shadow heatmaps, nap-of-the-earth profiles, Monte-Carlo swarms) **and** interactive **browser 3D exports** — a self-contained Plotly HTML view and a **CesiumJS** georeferenced globe flythrough — produced every run.
+6. **Global Planners — D* Lite & RRT\***: D* Lite incremental graph search with multi-objective cost, supporting **incremental replanning** for pop-up threats (the `*_replanning.png` demo); or a **from-scratch, risk-aware RRT\*** planner that samples the whole airspace (`--planner rrt`).
+7. **Local Trajectory Refinement**: Risk-aware LOS pruning + B-spline smoothing, or **risk-aware RRT\*** refinement with informed-tube sampling, risk-aware shortcutting, and **kinematic limits driven by the selected aircraft's real turn radius + climb rate** (`--refine rrt`).
+8. **Real Aircraft Calibration**: Selectable platform profiles (scout/attack helicopter, CH-47 Chinook, quadcopter UAV, MQ-9 Reaper) with real speed, climb rate, turn radius, fuel/endurance, RCS and clearance floor over the DEM's true scale — the scorecard reports real **km, minutes, kg of fuel** and endurance/ceiling feasibility (`--aircraft`).
+9. **Interactive Radar Placement**: A click-to-place desktop tool (`interactive.py`) — drop/remove radars and SAMs anywhere on the terrain, pick an aircraft, and re-plan on demand.
+10. **Mission Performance & Survivability Scoring**: Travel time, energy proxies, cumulative/peak risk, survivability \(S_{\text{surv}} = e^{-\kappa R}\), and composite scores.
+11. **Monte Carlo Robustness Analysis**: Stochastic evaluation under tracking/hazard-estimation perturbations.
+12. **Sensitivity / Pareto Study**: Sweeps the risk weight and traces the distance-vs-exposure trade-off front (the `*_pareto.png` study, produced every run).
+13. **Visualization**: Multi-panel Matplotlib dashboard (elevation-shaded 3D terrain, radar-shadow heatmaps, nap-of-the-earth profiles, Monte-Carlo swarms) **and** interactive **browser 3D exports** — a self-contained Plotly HTML view and a **CesiumJS** georeferenced globe flythrough — produced every run.
 
 > **Safety framing:** all hazards are generic simulated sensors with normalized, illustrative parameters (no real operational RCS/weapon/radar values). Results are planning-level research-simulation estimates, not operationally deployable.
 
@@ -106,6 +108,7 @@ AerX_Prototype/
 │   ├── rrt_star.py         # Risk-aware RRT* local refinement + shortcutting
 │   ├── route_metrics.py    # Flight time, energy, distance & risk metrics
 │   ├── scoring.py          # Survivability probability & composite scoring
+│   ├── aircraft.py         # Real aircraft profiles & real-world calibration layer
 │   ├── monte_carlo.py      # Stochastic robustness evaluation
 │   ├── analysis.py         # Pareto sensitivity sweep & incremental-replanning demo
 │   ├── visualization.py    # 4-panel tactical dashboard & scorecard
@@ -123,6 +126,7 @@ AerX_Prototype/
 ├── results/                # Timestamped run outputs (never overwritten)
 │
 ├── main.py                 # Single entry point — engine + full analysis suite CLI
+├── interactive.py          # Click-to-place radar planner (matplotlib GUI)
 ├── serve_viewer.py         # Local http server that opens the CesiumJS viewer
 ├── AerX_Route_Engine_Brief.html   # "How it works" technical brief (open in a browser)
 ├── requirements.txt        # Python dependency specifications
@@ -172,9 +176,31 @@ navigable-relief sub-region, and produces the same full product set in `results/
 
 ### 5. Options (any of the commands above)
 ```bash
-python main.py ghats --quick          # scorecard + dashboard only (fast iteration)
-python main.py everest --refine rrt   # risk-aware RRT* local refinement (else B-spline smoothing)
+python main.py ghats --quick               # scorecard + dashboard only (fast iteration)
+python main.py everest --refine rrt        # risk-aware RRT* local refinement (else B-spline)
+python main.py ghats --planner rrt         # plan with a from-scratch RRT* (else D* Lite)
+python main.py ghats --aircraft chinook    # real aircraft profile (see below)
 ```
+
+### 5a. Real aircraft profiles
+Every run is calibrated to a real platform — the DEM's true scale (~150 m/cell, real elevation)
+plus the aircraft's real speed, climb rate, turn radius, fuel/endurance, RCS and clearance floor —
+so the scorecard reports **real km, minutes, kg of fuel** and feasibility against endurance/ceiling:
+```bash
+python main.py ghats --aircraft scout_heli   # Scout / Attack Helicopter (default)
+python main.py ghats --aircraft chinook      # CH-47 Chinook (heavy-lift)
+python main.py ghats --aircraft quad_uav     # Small quadcopter UAV
+python main.py ghats --aircraft reaper       # MQ-9 Reaper (fixed-wing UAV)
+```
+
+### 5b. Interactive radar-placement planner
+Place radars/SAMs yourself anywhere on the terrain, pick an aircraft, and re-plan on demand:
+```bash
+python interactive.py ghats
+python interactive.py region --lat 34.1 --lon 74.8
+```
+Left-click adds a radar, right-click removes the nearest, **Enter** re-plans; `c` clears, `r` resets
+to auto-placed, `a` cycles aircraft, `+`/`-` sizes the next radar, `s` toggles SAM/radar.
 
 ### 6. CesiumJS 3D viewer
 The Cesium viewer must be served over http (its 3D workers can't load from a `file://` page):

@@ -70,6 +70,8 @@ class RiskAwareRRTStar:
         guide_path: np.ndarray,
         config: Optional[RRTStarConfig] = None,
         risk_sampler=None,
+        uniform: bool = False,
+        z_bounds: Optional[tuple] = None,
     ):
         """
         Parameters:
@@ -78,6 +80,9 @@ class RiskAwareRRTStar:
                 the precomputed cache), the refiner avoids live LOS-sampled risk
                 computation and runs orders of magnitude faster. Falls back to
                 compute_point_risk when None.
+            uniform: if True, sample the WHOLE airspace uniformly (a from-scratch
+                RRT* PLANNER) instead of an informed tube around the guide (the
+                refiner). z_bounds=(z_lo, z_hi) sets the altitude sampling band.
         """
         self.terrain = np.asarray(terrain, dtype=float)
         self.ny, self.nx = self.terrain.shape
@@ -86,15 +91,20 @@ class RiskAwareRRTStar:
         self.cfg = config or RRTStarConfig()
         self._rng = np.random.default_rng(self.cfg.seed)
         self._risk_sampler = risk_sampler
+        self.uniform = uniform
 
         # Cumulative arc length of the guide, for informed tube sampling.
         seg = np.linalg.norm(np.diff(self.guide, axis=0), axis=1)
         self._guide_s = np.concatenate([[0.0], np.cumsum(seg)])
         self._guide_len = float(self._guide_s[-1]) if len(seg) else 0.0
 
-        # Altitude sampling bounds taken from the guide plus clearance headroom.
-        self._z_lo = float(self.guide[:, 2].min()) - 10.0
-        self._z_hi = float(self.guide[:, 2].max()) + 20.0
+        # Altitude sampling bounds: explicit for the global planner, else the guide
+        # band plus clearance headroom for the refiner.
+        if z_bounds is not None:
+            self._z_lo, self._z_hi = float(z_bounds[0]), float(z_bounds[1])
+        else:
+            self._z_lo = float(self.guide[:, 2].min()) - 10.0
+            self._z_hi = float(self.guide[:, 2].max()) + 20.0
 
     # ----------------------------------------------------------------- helpers
     def _ground(self, x: float, y: float) -> float:
@@ -169,6 +179,13 @@ class RiskAwareRRTStar:
     def _sample(self, goal: np.ndarray) -> np.ndarray:
         if self._rng.random() < self.cfg.goal_sample_rate:
             return goal.copy()
+        if self.uniform:
+            # From-scratch planner: sample the whole airspace uniformly.
+            return np.array([
+                self._rng.uniform(0.0, self.nx - 1.0),
+                self._rng.uniform(0.0, self.ny - 1.0),
+                self._rng.uniform(self._z_lo, self._z_hi),
+            ])
         # Informed tube sample: pick a point along the guide, offset within a ball.
         s = self._rng.uniform(0.0, self._guide_len) if self._guide_len > 0 else 0.0
         base = np.array([np.interp(s, self._guide_s, self.guide[:, d]) for d in range(3)])
@@ -325,3 +342,34 @@ def refine_with_rrt_star(
         return guide
     planner = RiskAwareRRTStar(terrain, hazards, guide, config, risk_sampler=risk_sampler)
     return planner.refine(guide[0], guide[-1])
+
+
+def plan_global_rrt_star(
+    start,
+    goal,
+    terrain: np.ndarray,
+    hazards: List[HazardSite],
+    z_bounds: tuple,
+    risk_weight: float = 40.0,
+    config: Optional[RRTStarConfig] = None,
+    risk_sampler=None,
+) -> Optional[np.ndarray]:
+    """
+    From-scratch RRT* PLANNER: samples the WHOLE airspace uniformly (not a tube
+    around a guide) to build a risk-aware, kinematically-feasible route from start
+    to goal — a genuine sampling-based global planner, as an alternative to D* Lite.
+
+    `z_bounds` sets the altitude sampling band; `risk_weight` tunes the
+    distance-vs-exposure trade-off (higher = safer, longer routes). Returns the
+    (N,3) path or None if the tree never reached the goal.
+    """
+    start = np.asarray(start, dtype=float)
+    goal = np.asarray(goal, dtype=float)
+    cfg = config or RRTStarConfig(
+        max_iterations=6000, step_size=11.0, neighbor_radius=20.0,
+        goal_sample_rate=0.12, goal_tolerance=9.0)
+    cfg.risk_weight = float(risk_weight)
+    guide = np.array([start, goal], dtype=float)
+    planner = RiskAwareRRTStar(terrain, hazards, guide, cfg, risk_sampler=risk_sampler,
+                               uniform=True, z_bounds=z_bounds)
+    return planner.refine(start, goal)
