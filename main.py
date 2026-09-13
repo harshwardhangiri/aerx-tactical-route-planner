@@ -278,23 +278,33 @@ def solve_mission_scenario(scenario_key: str = "dem", scorecard_dir: str = "resu
         )
     print("=" * 104)
 
-    # 5b. Real-world view for the selected aircraft (physical units).
-    print("\n" + "=" * 104)
+    # 5b. Real-world view for the selected aircraft (physical units + kinematic
+    #     feasibility — does the route stay within the airframe's bank/climb limits?).
+    print("\n" + "=" * 112)
     print(f"          REAL-WORLD SORTIE - {aircraft.name} over {scenario_key.upper()} "
-          f"(fuel capacity {aircraft.fuel_capacity_kg:.0f} kg, ceiling {aircraft.service_ceiling:.0f} m)")
-    print("=" * 104)
-    print(f"{'Route Profile':<18} | {'Dist (km)':<9} | {'Time (min)':<10} | {'Fuel (kg)':<10} | "
-          f"{'Fuel %':<7} | {'Min AGL':<9} | {'Max alt':<9} | {'Feasible':<10}")
-    print("-" * 104)
+          f"(fuel {aircraft.fuel_capacity_kg:.0f} kg, ceiling {aircraft.service_ceiling:.0f} m, "
+          f"max bank {aircraft.max_bank_deg:.0f}deg, min turn radius {aircraft.turn_radius():.0f} m)")
+    print("=" * 112)
+    print(f"{'Route Profile':<18} | {'Dist (km)':<9} | {'Time (min)':<9} | {'Fuel (kg)':<9} | "
+          f"{'Min AGL':<8} | {'Turn R (m)':<10} | {'Bank need':<10} | {'Verdict':<12}")
+    print("-" * 112)
     for name, r in routes_data.items():
         rs = r["real"]
-        feasible = "OK" if (rs.within_endurance and rs.within_ceiling) else \
-                   ("FUEL" if not rs.within_endurance else "CEILING")
+        if not rs.within_endurance:
+            verdict = "OVER FUEL"
+        elif not rs.within_ceiling:
+            verdict = "OVER CEIL"
+        elif not rs.within_bank:
+            verdict = "TURN TOO TIGHT"
+        else:
+            verdict = "FLYABLE" + ("" if rs.within_climb else " (steep climb)")
+        tr = f"{rs.min_route_radius_m:.0f}" if rs.min_route_radius_m < 1e6 else "straight"
+        bank = f"{rs.max_bank_deg:.0f}/{aircraft.max_bank_deg:.0f}deg"
         print(
-            f"{name:<18} | {rs.distance_km:<9.1f} | {rs.time_min:<10.1f} | {rs.fuel_kg:<10.1f} | "
-            f"{rs.fuel_pct:<7.0f} | {rs.min_agl_m:<9.0f} | {rs.max_alt_m:<9.0f} | {feasible:<10}"
+            f"{name:<18} | {rs.distance_km:<9.1f} | {rs.time_min:<9.1f} | {rs.fuel_kg:<9.1f} | "
+            f"{rs.min_agl_m:<8.0f} | {tr:<10} | {bank:<10} | {verdict:<12}"
         )
-    print("=" * 104)
+    print("=" * 112)
 
     # Export Infographic Scorecard
     scorecard_save_path = f"{scorecard_dir}/mission_scorecard_and_metrics_guide_{scenario_key}.png"

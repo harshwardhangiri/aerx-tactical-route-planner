@@ -133,7 +133,13 @@ class RealStats:
     min_agl_m: float
     max_alt_m: float
     within_ceiling: bool
-    turn_radius_m: float
+    turn_radius_m: float          # aircraft's min turn radius at cruise (the limit)
+    min_route_radius_m: float     # tightest turn the route actually demands (m)
+    max_bank_deg: float           # bank the tightest turn needs at cruise
+    max_climb_grad: float         # steepest rise/run the route demands
+    within_bank: bool             # tightest turn is within the aircraft's bank limit
+    within_climb: bool            # steepest climb is within the aircraft's climb rate
+    flyable: bool                 # kinematically flyable (bank + climb both OK)
 
 
 def realize_sortie(legs: List[np.ndarray], terrain: np.ndarray,
@@ -152,6 +158,8 @@ def realize_sortie(legs: List[np.ndarray], terrain: np.ndarray,
     total_fuel_kg = 0.0
     min_agl_m = float("inf")
     max_alt_m = -float("inf")
+    min_route_radius_m = float("inf")   # tightest turn the route demands
+    max_climb_grad = 0.0                # steepest rise/run
 
     for wp in legs:
         if wp is None:
@@ -167,9 +175,9 @@ def realize_sortie(legs: List[np.ndarray], terrain: np.ndarray,
             vert_m = (b[2] - a[2]) * mpz
             seg_m = math.hypot(horiz_m, vert_m)
             total_dist_m += seg_m
+            if horiz_m > 1e-6:
+                max_climb_grad = max(max_climb_grad, abs(vert_m) / horiz_m)
 
-            # Time: climb segments are limited by the aircraft's vertical rate, so a
-            # steep climb takes at least vert / climb_rate; else cruise governs.
             t_cruise = seg_m / max(aircraft.cruise_speed, 1e-6)
             if vert_m > 0:
                 t_climb = vert_m / max(aircraft.climb_rate, 1e-6)
@@ -180,11 +188,34 @@ def realize_sortie(legs: List[np.ndarray], terrain: np.ndarray,
                 burn = aircraft.cruise_burn_kgps
             total_time_s += t_seg
             total_fuel_kg += burn * t_seg
+        # Tightest horizontal turn on this leg (Menger curvature of each triple, in
+        # metres). radius = 1/curvature; the smaller the radius, the tighter the turn.
+        for i in range(1, len(wp) - 1):
+            p0 = np.array([wp[i - 1, 0] * mpc, wp[i - 1, 1] * mpc])
+            p1 = np.array([wp[i, 0] * mpc, wp[i, 1] * mpc])
+            p2 = np.array([wp[i + 1, 0] * mpc, wp[i + 1, 1] * mpc])
+            a1, b1, c1 = p1 - p0, p2 - p1, p2 - p0
+            la, lb, lc = np.hypot(*a1), np.hypot(*b1), np.hypot(*c1)
+            area2 = abs(a1[0] * c1[1] - a1[1] * c1[0])   # 2 * triangle area
+            if la * lb * lc < 1e-6 or area2 < 1e-9:
+                continue                                  # straight -> infinite radius
+            radius = (la * lb * lc) / (2.0 * area2)
+            min_route_radius_m = min(min_route_radius_m, radius)
 
     if not np.isfinite(min_agl_m):
         min_agl_m = 0.0
     if not np.isfinite(max_alt_m):
         max_alt_m = 0.0
+
+    # Bank the tightest turn demands at cruise: tan(bank) = v^2 / (g * R).
+    if np.isfinite(min_route_radius_m):
+        max_bank_deg = math.degrees(math.atan(aircraft.cruise_speed ** 2 /
+                                              (_G * min_route_radius_m)))
+    else:
+        min_route_radius_m, max_bank_deg = float("inf"), 0.0
+    climb_limit_grad = aircraft.climb_rate / max(aircraft.cruise_speed, 1e-6)
+    within_bank = max_bank_deg <= aircraft.max_bank_deg + 3.0     # 3 deg tolerance
+    within_climb = max_climb_grad <= climb_limit_grad + 0.05      # informational
 
     return RealStats(
         distance_km=total_dist_m / 1000.0,
@@ -196,6 +227,14 @@ def realize_sortie(legs: List[np.ndarray], terrain: np.ndarray,
         max_alt_m=max_alt_m,
         within_ceiling=max_alt_m <= aircraft.service_ceiling,
         turn_radius_m=aircraft.turn_radius(),
+        min_route_radius_m=min_route_radius_m,
+        max_bank_deg=max_bank_deg,
+        max_climb_grad=max_climb_grad,
+        within_bank=within_bank,
+        within_climb=within_climb,
+        # Turn radius / bank is the HARD coordinated-turn limit; a steep climb is
+        # soft (a helicopter slows to climb, which the time/fuel model captures).
+        flyable=bool(within_bank),
     )
 
 

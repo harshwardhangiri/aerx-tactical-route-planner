@@ -187,9 +187,12 @@ class InteractivePlanner:
         re = compute_route_metrics(egr, self.terrain, self.hazards).integrated_risk if egr is not None else 0.0
         surv = float(np.clip(np.exp(-RISK_SENS * (ri + re)), 0.0, 1.0))
         self.routes = {"ingress": ing, "egress": egr}
+        fly = "flyable" if rs.flyable else "turn too tight"
+        if not rs.within_climb:
+            fly += ", steep climb"
         self.info = (f"{self.aircraft.name}: {rs.distance_km:.1f} km · {rs.time_min:.1f} min · "
                      f"{rs.fuel_kg:.0f} kg ({rs.fuel_pct:.0f}%) · survivability {surv*100:.0f}% · "
-                     f"min AGL {rs.min_agl_m:.0f} m")
+                     f"min AGL {rs.min_agl_m:.0f} m · bank {rs.max_bank_deg:.0f}/{self.aircraft.max_bank_deg:.0f}deg [{fly}]")
         self._render()
 
     def _plan_leg(self, grid, a, b):
