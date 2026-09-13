@@ -38,7 +38,9 @@ from src.planning_grid import PlanningGrid3D, CostWeights              # noqa: E
 from src.dstar_lite import DStarLite3D                                 # noqa: E402
 from src.smoothing import smooth_trajectory                           # noqa: E402
 from src.route_metrics import compute_route_metrics                   # noqa: E402
-from src.aircraft import get_aircraft, RegionScale, realize_sortie, list_aircraft  # noqa: E402
+from src.aircraft import (get_aircraft, RegionScale, realize_sortie,          # noqa: E402
+                          list_aircraft, kinematic_limits_for_grid)
+from src.rrt_star import refine_with_rrt_star, RRTStarConfig                  # noqa: E402
 
 RISK_SENS = 0.05  # survivability sensitivity lambda (matches the engine)
 
@@ -196,6 +198,12 @@ class InteractivePlanner:
         if path is None:
             return None
         coords = planner.get_path_coordinates(path)
+        # Aircraft-aware RRT* refinement -> flyable trajectory for the chosen airframe.
+        c = RRTStarConfig(max_iterations=600)
+        c.max_turn_deg, c.max_climb_rate = kinematic_limits_for_grid(self.aircraft, self.scale, c.step_size)
+        refined = refine_with_rrt_star(coords, self.terrain, self.hazards, c, risk_sampler=grid.risk_at)
+        if refined is not None and len(refined) >= 2:
+            coords = refined
         return smooth_trajectory(coords, self.terrain, num_points=120, min_agl=15.0,
                                  hazards=self.hazards, risk_sampler=grid.risk_at)
 

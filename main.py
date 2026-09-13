@@ -42,9 +42,10 @@ from src.cesium_export import export_cesium
 # Global scenario result cache for instant switching
 _SCENARIO_CACHE = {}
 
-# Local-refinement mode ("none" = B-spline smoothing, "rrt" = risk-aware RRT*).
-# Set from the --refine CLI flag before solving.
-REFINE_MODE = "none"
+# Local-refinement mode ("rrt" = aircraft-aware risk-aware RRT* refinement of the
+# D* Lite global route — the DEFAULT, so every route is flyable for the selected
+# airframe; "none" = B-spline smoothing only). Set from the --refine CLI flag.
+REFINE_MODE = "rrt"
 
 # Selected aircraft profile (real speed/fuel/turn/climb/RCS). Set from --aircraft.
 AIRCRAFT_KEY = "scout_heli"
@@ -161,6 +162,26 @@ def solve_mission_scenario(scenario_key: str = "dem", scorecard_dir: str = "resu
         dp = p.plan(a, b)
         return p.get_path_coordinates(dp) if dp is not None else None
 
+    def _make_route(raw, weights):
+        """Turn a global route into a flyable trajectory: by default, refine it with
+        the aircraft-aware RRT* (turn radius + climb rate from the selected airframe),
+        then B-spline smooth. The refiner's risk weight tracks the PROFILE's risk
+        weight, so a distance-focused route isn't silently risk-avoided during
+        refinement (which would collapse the profile spread). `--refine none` =
+        smoothing only."""
+        if raw is None:
+            return None
+        if REFINE_MODE == "rrt":
+            from src.rrt_star import refine_with_rrt_star, RRTStarConfig
+            c = RRTStarConfig(max_iterations=800, risk_weight=weights.w_risk * 6.0)
+            c.max_turn_deg, c.max_climb_rate = kinematic_limits_for_grid(
+                aircraft, region_scale, c.step_size)
+            refined = refine_with_rrt_star(raw, terrain, hazards, c, risk_sampler=base_grid.risk_at)
+            if refined is not None and len(refined) >= 2:
+                raw = refined
+        return smooth_trajectory(raw, terrain, num_points=120, min_agl=15.0,
+                                 hazards=hazards, risk_sampler=base_grid.risk_at)
+
     for name, weights in profiles:
         print(f"\n  --- Profile: {name} ---", flush=True)
         if PLANNER_MODE != "rrt":
@@ -172,29 +193,9 @@ def solve_mission_scenario(scenario_key: str = "dem", scorecard_dir: str = "resu
         if raw_coords is None:
             print(f"    [!] Warning: No feasible path for {name}", flush=True)
             continue
-        smooth_coords = smooth_trajectory(
-            raw_coords, terrain, num_points=120, min_agl=15.0, hazards=hazards,
-            risk_sampler=base_grid.risk_at
-        )
-
-        # Optional risk-aware RRT* local refinement of the global route, with the
-        # turn-rate/climb limits derived from the selected aircraft's real turn
-        # radius and climb rate (via the DEM scale).
         if REFINE_MODE == "rrt":
-            from src.rrt_star import refine_with_rrt_star, RRTStarConfig
-            print("    [>] Refining with risk-aware RRT*...", end="", flush=True)
-            _cfg = RRTStarConfig(max_iterations=900)
-            _cfg.max_turn_deg, _cfg.max_climb_rate = kinematic_limits_for_grid(
-                aircraft, region_scale, _cfg.step_size)
-            refined = refine_with_rrt_star(
-                raw_coords, terrain, hazards, _cfg, risk_sampler=base_grid.risk_at
-            )
-            if refined is not None and len(refined) >= 2:
-                smooth_coords = smooth_trajectory(
-                    refined, terrain, num_points=120, min_agl=15.0, hazards=hazards,
-                    risk_sampler=base_grid.risk_at
-                )
-            print(" [OK]", flush=True)
+            print("    [>] Aircraft-aware RRT* refinement (ingress + egress)...", end="", flush=True)
+        smooth_coords = _make_route(raw_coords, weights)
 
         # Calculate metrics
         metrics = compute_route_metrics(smooth_coords, terrain, hazards)
@@ -206,13 +207,9 @@ def solve_mission_scenario(scenario_key: str = "dem", scorecard_dir: str = "resu
         # asymmetry the concept document calls for.
         print("    [>] Computing egress (return) trajectory...", end="", flush=True)
         egress_raw = _plan_raw(goal_pos, start_pos, weights, "egress")
-        egress_smooth = None
+        egress_smooth = _make_route(egress_raw, weights)
         egress_metrics = None
-        if egress_raw is not None:
-            egress_smooth = smooth_trajectory(
-                egress_raw, terrain, num_points=120, min_agl=15.0, hazards=hazards,
-                risk_sampler=base_grid.risk_at
-            )
+        if egress_smooth is not None:
             egress_metrics = compute_route_metrics(egress_smooth, terrain, hazards)
             print(" [OK]", flush=True)
         else:
@@ -423,8 +420,9 @@ def main():
     parser.add_argument("--label", default=None, help="Folder/filename label for 'region'.")
     parser.add_argument("--quick", action="store_true",
                         help="Scorecard + dashboard only (skip Pareto, replanning, Plotly, Cesium).")
-    parser.add_argument("--refine", choices=["none", "rrt"], default="none",
-                        help="Local refinement: 'none' (B-spline) or 'rrt' (risk-aware RRT*).")
+    parser.add_argument("--refine", choices=["none", "rrt"], default="rrt",
+                        help="Local refinement (default 'rrt'): aircraft-aware RRT* makes the "
+                             "route flyable; 'none' = B-spline smoothing only (faster).")
     parser.add_argument("--aircraft", default="scout_heli", choices=list(AIRCRAFT.keys()),
                         help="Aircraft profile for real speed/fuel/turn/climb/RCS (default: scout_heli).")
     parser.add_argument("--planner", choices=["dstar", "rrt"], default="dstar",

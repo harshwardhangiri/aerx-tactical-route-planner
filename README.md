@@ -22,7 +22,7 @@ Research-grade terrain-aware, risk-sensitive 3D UAV/rotary-wing mission planning
 
 **Threats are placed by the terrain, not by hand.** A DEM carries only elevation — no radars. For every region the engine reads the terrain and the base→target corridor and *auto-places* the threat laydown: a **search radar** on the tallest summit commanding the direct path, a **sector radar** on a flanking ridge, and a **SAM** on high ground over the corridor (blind below its minimum-altitude floor). Deterministic, and different for every region.
 
-**Why it matters — the trade-off it exposes.** Over the Western Ghats, the shortest sortie flies right past the summit radar and is only **~34% survivable**; a route that detours through the valleys is **~69% survivable** for ~25% more distance. Neither is free — and a route that maximizes survival can be rejected by the fuel budget if it can't make it home. Surfacing that tension is the entire point of the engine. The threat range is auto-calibrated to each region so this trade-off stays meaningful everywhere — from the gentle Ghats to the extreme high Himalaya around Everest (a genuinely hard region, where even the best route is only modestly survivable).
+**Why it matters — the trade-off it exposes.** Over the Western Ghats, the shortest sortie flies right past the summit radar and is only **~34% survivable**; a route that detours through the valleys is **~87% survivable** for ~18% more distance. Neither is free — and a route that maximizes survival can be rejected by the fuel budget if it can't make it home. Surfacing that tension is the entire point of the engine. The threat range is auto-calibrated to each region so this trade-off stays meaningful everywhere — from the gentle Ghats to the extreme high Himalaya around Everest (a genuinely hard region, where even the best route is only modestly survivable).
 
 **Run it** (every mission uses a real DEM; each run writes a fresh timestamped folder):
 
@@ -82,7 +82,7 @@ Run it live: `python serve_viewer.py` serves the newest viewer over http and ope
 4. **Hard-Feasibility / Soft-Risk Planning**: Optional detection-threshold that marks over-exposed nodes as hard keep-outs (not just costs), implementing the hard-feasibility formulation of Drones 2026, 10, 469.
 5. **Layered 3D Planning State Space**: Enforces AGL clearances and kinematic climb-slope limits; fast trilinear risk lookup for inner loops.
 6. **Global Planners — D* Lite & RRT\***: D* Lite incremental graph search with multi-objective cost, supporting **incremental replanning** for pop-up threats (the `*_replanning.png` demo); or a **from-scratch, risk-aware RRT\*** planner that samples the whole airspace (`--planner rrt`).
-7. **Local Trajectory Refinement**: Risk-aware LOS pruning + B-spline smoothing, or **risk-aware RRT\*** refinement with informed-tube sampling, risk-aware shortcutting, and **kinematic limits driven by the selected aircraft's real turn radius + climb rate** (`--refine rrt`).
+7. **Local Trajectory Refinement (default)**: By default the D* Lite global route is refined into a **flyable** trajectory by a **risk-aware RRT\*** with informed-tube sampling, risk-aware shortcutting, and **kinematic limits from the selected aircraft's real turn radius + climb rate** — global planning + local kinematic refinement, the standard autonomy architecture. `--refine none` uses B-spline smoothing only (faster).
 8. **Real Aircraft Calibration**: Selectable platform profiles (scout/attack helicopter, CH-47 Chinook, quadcopter UAV, MQ-9 Reaper) with real speed, climb rate, turn radius, fuel/endurance, RCS and clearance floor over the DEM's true scale — the scorecard reports real **km, minutes, kg of fuel** and endurance/ceiling feasibility (`--aircraft`).
 9. **Interactive Radar Placement**: A click-to-place desktop tool (`interactive.py`) — drop/remove radars and SAMs anywhere on the terrain, pick an aircraft, and re-plan on demand.
 10. **Mission Performance & Survivability Scoring**: Travel time, energy proxies, cumulative/peak risk, survivability \(S_{\text{surv}} = e^{-\kappa R}\), and composite scores.
@@ -177,7 +177,7 @@ navigable-relief sub-region, and produces the same full product set in `results/
 ### 5. Options (any of the commands above)
 ```bash
 python main.py ghats --quick               # scorecard + dashboard only (fast iteration)
-python main.py everest --refine rrt        # risk-aware RRT* local refinement (else B-spline)
+python main.py ghats --refine none         # faster: B-spline only (default is aircraft-aware RRT*)
 python main.py ghats --planner rrt         # plan with a from-scratch RRT* (else D* Lite)
 python main.py ghats --aircraft chinook    # real aircraft profile (see below)
 ```
